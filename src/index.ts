@@ -36,7 +36,7 @@ async function main() {
 
     // Анализ данных
     console.log("🔍 Анализ сделок...");
-    const statistics = tradeAnalyzer.calculateStatistics(closedTrades);
+    const statistics = await tradeAnalyzer.calculateStatistics(closedTrades);
     const pairStats = tradeAnalyzer.calculatePairStatistics(closedTrades);
     const tagStats = tradeAnalyzer.calculateEnterTagStatistics(closedTrades);
     const topProfitable = tradeAnalyzer.getTopProfitable(closedTrades, 3);
@@ -71,6 +71,9 @@ async function main() {
     }
     console.log(`- Sharpe Ratio: ${reportStatistics.sharpeRatio.toFixed(3)}`);
     console.log(`- Sortino Ratio: ${reportStatistics.sortinoRatio.toFixed(3)}`);
+    if (reportStatistics.buyAndHoldReturn) {
+      console.log(`- Доходность Buy & Hold (BTC): ${reportStatistics.buyAndHoldReturn.toFixed(2)}%`);
+    }
     console.log(`- Общее проскальзывание: ${reportStatistics.totalSlippage.toFixed(2)}`);
     console.log(`- Среднее проскальзывание: ${reportStatistics.averageSlippage.toFixed(2)}`);
     console.log('------------------------');

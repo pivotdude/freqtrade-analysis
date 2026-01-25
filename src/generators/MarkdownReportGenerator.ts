@@ -81,6 +81,12 @@ export class MarkdownReportGenerator {
     md += `    - *(Отношение общей прибыли к общему убытку. Значение > 1 обычно говорит о прибыльности)*\n`;
     md += `- **Expectancy:** ${stats.expectancy.toFixed(2)} USDT\n`;
     md += `    - *(Средняя прибыль на сделку с учетом винрейта. Показывает, сколько можно ожидать от одной сделки)*\n`;
+
+    if (stats.buyAndHoldReturn !== undefined) {
+      md += `- **Доходность Buy & Hold (BTC):** ${stats.buyAndHoldReturn.toFixed(2)}%\n`;
+      md += `    - *(Показывает доходность стратегии "купи и держи" для BTC/USDT за тот же период. Помогает понять, обогнала ли стратегия рынок)*\n`;
+    }
+
     if (stats.avgProfitPerHourPct !== undefined) {
       md += `- **Средняя прибыль в час:** ${stats.avgProfitPerHourPct.toFixed(2)}%\n`;
       md += `    - *(Показывает эффективность сделок по отношению к их длительности)*\n`;

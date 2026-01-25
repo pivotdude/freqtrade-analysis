@@ -1,4 +1,5 @@
 import type { Trade, TradeStatistics, PairStatistics, PairStatisticsReport, Drawdown, EnterTagStatistics, EnterTagStatisticsReport } from "../types/trade.types";
+import { MarketDataService } from "../services/MarketDataService";
 
 /**
  * Анализатор сделок
@@ -10,7 +11,10 @@ export class TradeAnalyzer {
    * @param trades Массив сделок
    * @returns Объект со статистикой
    */
-  calculateStatistics(trades: Trade[]): TradeStatistics {
+  async calculateStatistics(trades: Trade[]): Promise<TradeStatistics> {
+    if (trades.length === 0) {
+      return { /* return empty/default stats */ };
+    }
     const totalTrades = trades.length;
     const profitableTrades = trades.filter(t => (t.close_profit_abs || 0) > 0).length;
     const losingTrades = trades.filter(t => (t.close_profit_abs || 0) < 0).length;
@@ -83,6 +87,31 @@ export class TradeAnalyzer {
 
     const { maxOpenTrades, maxExposureAmount } = this._calculateExposure(trades);
 
+    // Calculate Buy & Hold return
+    let buyAndHoldReturn = 0;
+    const sortedByOpenDate = [...trades].sort((a, b) => new Date(a.open_date).getTime() - new Date(b.open_date).getTime());
+    const firstTradeDate = new Date(sortedByOpenDate[0].open_date);
+    const lastTrade = [...trades].sort((a,b) => new Date(a.close_date).getTime() - new Date(b.close_date).getTime()).pop();
+    
+    if (lastTrade && lastTrade.close_date) {
+        const lastTradeDate = new Date(lastTrade.close_date);
+        const marketDataService = new MarketDataService();
+        const benchmarkPair = 'BTC/USDT'; // Hardcoded for now
+
+        try {
+            const startPrice = await marketDataService.getHistoricalPrice(benchmarkPair, firstTradeDate);
+            const endPrice = await marketDataService.getHistoricalPrice(benchmarkPair, lastTradeDate);
+
+            if (startPrice > 0) {
+                buyAndHoldReturn = ((endPrice - startPrice) / startPrice) * 100;
+            }
+        } catch (error) {
+            console.warn(`\n⚠️ Could not calculate Buy & Hold return: ${(error as Error).message}`);
+            buyAndHoldReturn = 0; // Gracefully handle error
+        }
+    }
+
+
     return {
       totalTrades,
       profitableTrades,
@@ -99,6 +128,7 @@ export class TradeAnalyzer {
       averageSlippage,
       avgProfitPerHourPct,
       avgFeePct,
+      buyAndHoldReturn,
     };
   }
 
