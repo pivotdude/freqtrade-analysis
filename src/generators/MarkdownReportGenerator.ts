@@ -38,7 +38,7 @@ export class MarkdownReportGenerator {
     md += this.generateTradesWithOrders(trades);
     md += this.generatePairStatisticsSection(pairStats);
     md += this.generateEnterTagStatisticsSection(tagStats);
-    md += this.generateTopTradesSection(topProfitable, topLosing);
+    md += this.generateTopTradesSection(topProfitable, topLosing, statistics);
 
     return md;
   }
@@ -74,8 +74,8 @@ export class MarkdownReportGenerator {
     md += `- **Комиссии:** ${stats.totalFees.toFixed(2)} USDT\n`;
     md += `- **Чистая прибыль:** ${(stats.totalProfit - stats.totalFees).toFixed(2)} USDT\n`;
     if (stats.avgFeePct !== undefined) {
-      md += `- **Средняя комиссия от прибыли:** ${stats.avgFeePct.toFixed(2)}%\n`;
-      md += `    - *(Какую долю от прибыли прибыльной сделки в среднем "съедает" комиссия)*\n`;
+      md += `- **Комиссия от суммарной прибыли:** ${stats.avgFeePct.toFixed(2)}%\n`;
+      md += `    - *(Общая комиссия прибыльных сделок / общая прибыль. Более точный показатель, чем простое среднее.)*\n`;
     }
     md += `- **Profit Factor:** ${stats.profitFactor.toFixed(2)}\n`;
     md += `    - *(Отношение общей прибыли к общему убытку. Значение > 1 обычно говорит о прибыльности)*\n`;
@@ -89,7 +89,7 @@ export class MarkdownReportGenerator {
 
     if (stats.avgProfitPerHourPct !== undefined) {
       md += `- **Средняя прибыль в час:** ${stats.avgProfitPerHourPct.toFixed(2)}%\n`;
-      md += `    - *(Показывает эффективность сделок по отношению к их длительности)*\n`;
+      md += `    - *(Показывает средневзвешенную по времени доходность. Формула: (SUM(close_profit) * 100 / SUM(duration_minutes)) * 60)*\n`;
     }
     if (stats.maxOpenTrades !== undefined) {
       md += `- **Макс. одновременно открытых сделок:** ${stats.maxOpenTrades}\n`;
@@ -147,9 +147,14 @@ export class MarkdownReportGenerator {
     const closeDate = trade.close_date
       ? this.dateFormatter.formatDate(trade.close_date)
       : "-";
-    const profitPercent = (trade.close_profit || 0) * 100;
-    const profitAbs = trade.close_profit_abs || 0;
-    const profitColor = profitAbs >= 0 ? "🟢" : "🔴";
+    
+    const netProfitAbs = trade.close_profit_abs || 0;
+    const netProfitPercent = (trade.close_profit || 0) * 100;
+    const totalFee = (trade.fee_open_cost || 0) + (trade.fee_close_cost || 0);
+    const grossProfitAbs = netProfitAbs + totalFee;
+    const grossProfitPercent = trade.stake_amount > 0 ? (grossProfitAbs / trade.stake_amount) * 100 : 0;
+    
+    const profitColor = netProfitAbs >= 0 ? "🟢" : "🔴";
     const direction = trade.is_short ? "📉" : "📈";
     const status = isOpen ? "🔵 Открыта" : "✅ Закрыта";
 
@@ -169,14 +174,15 @@ export class MarkdownReportGenerator {
     }
     md += `- **Сумма:** ${trade.stake_amount.toFixed(2)} USDT\n`;
     if (!isOpen) {
-      md += `- **Прибыль:** ${profitColor} ${profitPercent.toFixed(2)}% (${profitAbs.toFixed(2)} USDT)\n`;
-      const totalFee = (trade.fee_open_cost || 0) + (trade.fee_close_cost || 0);
+      md += `- **Прибыль (брутто):** ${profitColor} ${grossProfitPercent.toFixed(2)}% (${grossProfitAbs.toFixed(2)} USDT)\n`;
       md += `- **Комиссия:** ${totalFee.toFixed(2)} USDT (вход: ${(trade.fee_open_cost || 0).toFixed(2)}, выход: ${(trade.fee_close_cost || 0).toFixed(2)})\n`;
-      if (trade.close_profit_abs && trade.close_profit_abs > 0) {
-        const fee_as_pct_of_profit = (totalFee / trade.close_profit_abs) * 100;
+      
+      if (grossProfitAbs > 0) {
+        const fee_as_pct_of_profit = (totalFee / grossProfitAbs) * 100;
         md += `- **Комиссия от прибыли:** ${fee_as_pct_of_profit.toFixed(2)}%\n`;
       }
-      md += `- **Чистая прибыль:** ${(profitAbs - totalFee).toFixed(2)} USDT\n`;
+      
+      md += `- **Прибыль (чистая):** ${profitColor} ${netProfitPercent.toFixed(2)}% (${netProfitAbs.toFixed(2)} USDT)\n`;
 
       const duration_minutes = trade.close_date ? (new Date(trade.close_date).getTime() - new Date(trade.open_date).getTime()) / 60000 : 0;
       if (duration_minutes > 0) {
@@ -270,23 +276,37 @@ export class MarkdownReportGenerator {
   private generateTopTradesSection(
     topProfitable: Trade[],
     topLosing: Trade[],
+    statistics: TradeStatistics,
   ): string {
-    let md = "## Лучшие и худшие сделки\n\n";
+    const hasLosingTrades = statistics.losingTrades > 0;
+    const mainTitle = hasLosingTrades ? "## Лучшие и худшие сделки" : "## Лучшие и наименее прибыльные сделки";
+    let md = `${mainTitle}\n\n`;
 
     md += "### 🏆 Топ-3 прибыльных сделок\n\n";
-    for (let i = 0; i < topProfitable.length; i++) {
-      const t = topProfitable[i];
-      if (t) {
-        md += `${i + 1}. **${t.pair}** - ${(t.close_profit_abs || 0).toFixed(2)} USDT (${((t.close_profit || 0) * 100).toFixed(2)}%)\n`;
+    if (topProfitable.length === 0) {
+      md += "Нет прибыльных сделок для отображения.\n";
+    } else {
+      for (let i = 0; i < topProfitable.length; i++) {
+        const t = topProfitable[i];
+        if (t) {
+          md += `${i + 1}. **${t.pair}** - ${(t.close_profit_abs || 0).toFixed(2)} USDT (${((t.close_profit || 0) * 100).toFixed(2)}%)\n`;
+        }
       }
     }
+    
+    const losingTitle = hasLosingTrades ? '📉 Топ-3 убыточных сделок' : '📉 Топ-3 наименее прибыльных сделок';
 
-    md += "\n### 📉 Топ-3 убыточных сделок\n\n";
-    for (let i = 0; i < topLosing.length; i++) {
-      const t = topLosing[i];
-      if (t) {
-        md += `${i + 1}. **${t.pair}** - ${(t.close_profit_abs || 0).toFixed(2)} USDT (${((t.close_profit || 0) * 100).toFixed(2)}%)\n`;
-      }
+    md += `\n${losingTitle}\n\n`;
+    
+    if (topLosing.length === 0) {
+        md += "Нет сделок для отображения в этой категории.\n"
+    } else {
+        for (let i = 0; i < topLosing.length; i++) {
+          const t = topLosing[i];
+          if (t) {
+            md += `${i + 1}. **${t.pair}** - ${(t.close_profit_abs || 0).toFixed(2)} USDT (${((t.close_profit || 0) * 100).toFixed(2)}%)\n`;
+          }
+        }
     }
 
     return md;

@@ -33,7 +33,7 @@ export class TradeAnalyzer {
 
     const grossProfit = trades.reduce((sum, t) => sum + Math.max(0, (t.close_profit_abs || 0)), 0);
     const grossLoss = trades.reduce((sum, t) => sum + Math.abs(Math.min(0, (t.close_profit_abs || 0))), 0);
-    const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : 0;
+    const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : (grossProfit > 0 ? Infinity : 1);
     const totalFees = trades.reduce((sum, t) => sum + (t.fee_open_cost || 0) + (t.fee_close_cost || 0), 0);
 
     let totalSlippage = 0;
@@ -57,33 +57,25 @@ export class TradeAnalyzer {
 
     const averageSlippage = slippageCount > 0 ? totalSlippage / slippageCount : 0;
 
-    let totalProfitPerHourPct = 0;
-    let tradesWithDuration = 0;
+    let totalProfitPct = 0;
+    let totalDurationMinutes = 0;
 
     for (const trade of trades) {
-        if (trade.close_date && trade.close_profit) {
+        if (trade.close_date && trade.close_profit && trade.open_date) {
             const duration_minutes = (new Date(trade.close_date).getTime() - new Date(trade.open_date).getTime()) / 60000;
             if (duration_minutes > 0) {
-                const profit_per_hour_pct = (trade.close_profit * 100 / duration_minutes) * 60;
-                totalProfitPerHourPct += profit_per_hour_pct;
-                tradesWithDuration++;
+                totalProfitPct += trade.close_profit;
+                totalDurationMinutes += duration_minutes;
             }
         }
     }
 
-    const avgProfitPerHourPct = tradesWithDuration > 0 ? totalProfitPerHourPct / tradesWithDuration : 0;
+    const avgProfitPerHourPct = totalDurationMinutes > 0 ? (totalProfitPct * 100 / totalDurationMinutes) * 60 : 0;
 
-    let totalFeePct = 0;
-    let profitableTradesWithProfit = 0;
-    for (const trade of trades) {
-        if (trade.close_profit_abs && trade.close_profit_abs > 0) {
-            const total_fee = (trade.fee_open_cost || 0) + (trade.fee_close_cost || 0);
-            const fee_as_pct_of_profit = (total_fee / trade.close_profit_abs) * 100;
-            totalFeePct += fee_as_pct_of_profit;
-            profitableTradesWithProfit++;
-        }
-    }
-    const avgFeePct = profitableTradesWithProfit > 0 ? totalFeePct / profitableTradesWithProfit : 0;
+    const profitableTradesWithProfit = trades.filter(t => t.close_profit_abs && t.close_profit_abs > 0);
+    const totalFeesOnProfitable = profitableTradesWithProfit.reduce((sum, t) => sum + (t.fee_open_cost || 0) + (t.fee_close_cost || 0), 0);
+    const totalProfitOnProfitable = profitableTradesWithProfit.reduce((sum, t) => sum + t.close_profit_abs, 0);
+    const avgFeePct = totalProfitOnProfitable > 0 ? (totalFeesOnProfitable / totalProfitOnProfitable) * 100 : 0;
 
     const { maxOpenTrades, maxExposureAmount } = this._calculateExposure(trades);
 
@@ -301,7 +293,9 @@ export class TradeAnalyzer {
     const downsideStdDev = this._calculateDownsideStdDev(returns, riskFreeRate);
 
     const sharpeRatio = stdDev > 0 ? (avgReturn - riskFreeRate) / stdDev : 0;
-    const sortinoRatio = downsideStdDev > 0 ? (avgReturn - riskFreeRate) / downsideStdDev : 0;
+    const sortinoRatio = downsideStdDev > 0
+      ? (avgReturn - riskFreeRate) / downsideStdDev
+      : ((avgReturn - riskFreeRate) > 0 ? Infinity : 0);
 
     return { sharpeRatio, sortinoRatio };
   }
