@@ -17,15 +17,20 @@ export class TradeAnalyzer {
     const totalProfit = trades.reduce((sum, t) => sum + (t.close_profit_abs || 0), 0);
     const avgProfit = totalTrades > 0 ? totalProfit / totalTrades : 0;
     const winRate = totalTrades > 0 ? (profitableTrades / totalTrades) * 100 : 0;
-    const totalFees = trades.reduce((sum, t) => {
-      const openFee = t.fee_open_cost || 0;
-      const closeFee = t.fee_close_cost || 0;
-      return sum + openFee + closeFee;
-    }, 0);
+    const lossRate = totalTrades > 0 ? (losingTrades / totalTrades) * 100 : 0;
+
+    const profitableTradesAbs = trades.filter(t => (t.close_profit_abs || 0) > 0);
+    const losingTradesAbs = trades.filter(t => (t.close_profit_abs || 0) < 0);
+
+    const avgWin = profitableTrades > 0 ? profitableTradesAbs.reduce((sum, t) => sum + (t.close_profit_abs || 0), 0) / profitableTrades : 0;
+    const avgLoss = losingTrades > 0 ? Math.abs(losingTradesAbs.reduce((sum, t) => sum + (t.close_profit_abs || 0), 0)) / losingTrades : 0;
+
+    const expectancy = (winRate / 100 * avgWin) - (lossRate / 100 * avgLoss);
 
     const grossProfit = trades.reduce((sum, t) => sum + Math.max(0, (t.close_profit_abs || 0)), 0);
     const grossLoss = trades.reduce((sum, t) => sum + Math.abs(Math.min(0, (t.close_profit_abs || 0))), 0);
     const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : 0;
+    const totalFees = trades.reduce((sum, t) => sum + (t.fee_open_cost || 0) + (t.fee_close_cost || 0), 0);
 
     return {
       totalTrades,
@@ -36,7 +41,7 @@ export class TradeAnalyzer {
       winRate,
       totalFees,
       profitFactor,
-      profitFactor
+      expectancy
     };
   }
 

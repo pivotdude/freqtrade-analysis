@@ -81,7 +81,8 @@ export interface TradeStatistics {
   avgProfit: number;
   winRate: number;
   totalFees: number;
-  profitFactor?: number;
+  profitFactor: number;
+  expectancy: number;
   drawdown?: Drawdown;
 }
 

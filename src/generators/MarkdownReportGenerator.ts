@@ -67,9 +67,8 @@ export class MarkdownReportGenerator {
     md += `- **Средняя прибыль:** ${stats.avgProfit.toFixed(2)} USDT\n`;
     md += `- **Комиссии:** ${stats.totalFees.toFixed(2)} USDT\n`;
     md += `- **Чистая прибыль:** ${(stats.totalProfit - stats.totalFees).toFixed(2)} USDT\n`;
-    if (stats.profitFactor !== undefined) {
-      md += `- **Profit Factor:** ${stats.profitFactor.toFixed(2)}\n`;
-    }
+    md += `- **Profit Factor:** ${stats.profitFactor.toFixed(2)}\n`;
+    md += `- **Expectancy:** ${stats.expectancy.toFixed(2)} USDT\n`;
 
     if (stats.drawdown) {
       md += `- **Макс. просадка:** ${stats.drawdown.maxDrawdown.toFixed(2)}% (${stats.drawdown.maxDrawdownAbs.toFixed(2)} USDT)\n\n`;

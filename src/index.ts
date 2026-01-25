@@ -58,6 +58,8 @@ async function main() {
     console.log(`- Профитных/Убыточных: ${reportStatistics.profitableTrades}/${reportStatistics.losingTrades}`);
     console.log(`- Винрейт: ${reportStatistics.winRate.toFixed(2)}%`);
     console.log(`- Общий профит: ${reportStatistics.totalProfit.toFixed(2)}`);
+    console.log(`- Profit Factor: ${reportStatistics.profitFactor.toFixed(2)}`);
+    console.log(`- Expectancy: ${reportStatistics.expectancy.toFixed(2)}`);
     if (reportStatistics.drawdown) {
       console.log(`- Макс. просадка: ${reportStatistics.drawdown.maxDrawdown.toFixed(2)}% (${reportStatistics.drawdown.maxDrawdownAbs.toFixed(2)})`);
     }
