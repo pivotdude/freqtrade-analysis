@@ -70,6 +70,10 @@ export class MarkdownReportGenerator {
     md += `- **Средняя прибыль:** ${stats.avgProfit.toFixed(2)} USDT\n`;
     md += `- **Комиссии:** ${stats.totalFees.toFixed(2)} USDT\n`;
     md += `- **Чистая прибыль:** ${(stats.totalProfit - stats.totalFees).toFixed(2)} USDT\n`;
+    if (stats.avgFeePct !== undefined) {
+      md += `- **Средняя комиссия от прибыли:** ${stats.avgFeePct.toFixed(2)}%\n`;
+      md += `    - *(Какую долю от прибыли прибыльной сделки в среднем "съедает" комиссия)*\n`;
+    }
     md += `- **Profit Factor:** ${stats.profitFactor.toFixed(2)}\n`;
     md += `- **Expectancy:** ${stats.expectancy.toFixed(2)} USDT\n`;
     if (stats.avgProfitPerHourPct !== undefined) {
@@ -156,6 +160,10 @@ export class MarkdownReportGenerator {
       md += `- **Прибыль:** ${profitColor} ${profitPercent.toFixed(2)}% (${profitAbs.toFixed(2)} USDT)\n`;
       const totalFee = (trade.fee_open_cost || 0) + (trade.fee_close_cost || 0);
       md += `- **Комиссия:** ${totalFee.toFixed(2)} USDT (вход: ${(trade.fee_open_cost || 0).toFixed(2)}, выход: ${(trade.fee_close_cost || 0).toFixed(2)})\n`;
+      if (trade.close_profit_abs && trade.close_profit_abs > 0) {
+        const fee_as_pct_of_profit = (totalFee / trade.close_profit_abs) * 100;
+        md += `- **Комиссия от прибыли:** ${fee_as_pct_of_profit.toFixed(2)}%\n`;
+      }
       md += `- **Чистая прибыль:** ${(profitAbs - totalFee).toFixed(2)} USDT\n`;
 
       const duration_minutes = trade.close_date ? (new Date(trade.close_date).getTime() - new Date(trade.open_date).getTime()) / 60000 : 0;

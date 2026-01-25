@@ -91,6 +91,7 @@ export interface TradeStatistics {
   totalSlippage?: number;
   averageSlippage?: number;
   avgProfitPerHourPct?: number;
+  avgFeePct?: number;
 }
 
 /**
