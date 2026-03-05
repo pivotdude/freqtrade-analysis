@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  release:
+    types:
+      - published
+
+jobs:
+  verify:
+    if: github.event_name != 'release'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.9"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bunx tsc --noEmit
+
+      - name: Run tests
+        run: bun run test
+
+      - name: Build
+        run: bun run build
+
+  release-binaries:
+    if: github.event_name == 'release' && github.event.action == 'published'
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            asset_name: linux-x64
+          - os: windows-latest
+            asset_name: windows-x64
+          - os: macos-13
+            asset_name: macos-x64
+          - os: macos-14
+            asset_name: macos-arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.9"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build executable
+        run: bun run build:exe
+
+      - name: Prepare release asset
+        shell: bash
+        run: |
+          mkdir -p release-assets
+
+          SOURCE="freqtrade-analys"
+          EXT=""
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            if [ -f "freqtrade-analys.exe" ]; then
+              SOURCE="freqtrade-analys.exe"
+              EXT=".exe"
+            fi
+          fi
+
+          if [ ! -f "${SOURCE}" ]; then
+            echo "Executable not found: ${SOURCE}"
+            ls -la
+            exit 1
+          fi
+
+          ASSET_PATH="release-assets/freqtrade-analys-${{ matrix.asset_name }}${EXT}"
+          mv "${SOURCE}" "${ASSET_PATH}"
+          echo "ASSET_PATH=${ASSET_PATH}" >> "${GITHUB_ENV}"
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.ASSET_PATH }}

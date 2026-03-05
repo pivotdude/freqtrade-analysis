@@ -32,4 +32,14 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # Finder (MacOS) folder config
 .DS_Store
+
+# Local trading data (never commit)
 tradesv3.*
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+trades_report.md
+freqtrade-analys
+freqtrade-analys.exe
+
+freqtrade-analys*
