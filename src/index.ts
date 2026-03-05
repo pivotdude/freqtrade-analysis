@@ -2,40 +2,52 @@ import { DatabaseService } from "./services/DatabaseService";
 import { TradeAnalyzer } from "./analyzers/TradeAnalyzer";
 import { MarkdownReportGenerator } from "./generators/MarkdownReportGenerator";
 import { DateFormatter } from "./formatters/DateFormatter";
-import { config } from "./config";
+import { resolveRuntimeConfig } from "./config";
 
 /**
- * Главная функция приложения
- * Координирует работу всех компонентов
- * Следует принципу Dependency Injection - создает зависимости и передает их в классы
+ * Main application function.
+ * Coordinates all components.
+ * Follows Dependency Injection by creating and wiring dependencies.
  */
 async function main() {
-  const { dbPath, reportPath: outputPath, initialCapital } = config;
+  const runtimeConfig = resolveRuntimeConfig(Bun.argv.slice(2));
+  const {
+    dbPath,
+    reportPath: outputPath,
+    initialCapital,
+    reportLanguage,
+    benchmarkPair,
+    enableBenchmark,
+    exchangeId,
+  } = runtimeConfig;
 
-  // Создание экземпляров сервисов (Dependency Injection)
+  // Create service instances (Dependency Injection)
   const databaseService = new DatabaseService(dbPath);
-  const tradeAnalyzer = new TradeAnalyzer();
-  const dateFormatter = new DateFormatter();
-  const reportGenerator = new MarkdownReportGenerator(dateFormatter);
+  const marketDataProvider = enableBenchmark
+    ? new (await import("./services/MarketDataService")).MarketDataService(exchangeId)
+    : undefined;
+  const tradeAnalyzer = new TradeAnalyzer(marketDataProvider, benchmarkPair);
+  const dateFormatter = new DateFormatter(reportLanguage);
+  const reportGenerator = new MarkdownReportGenerator(dateFormatter, reportLanguage);
 
   try {
-    // Получение данных
-    console.log("📊 Загрузка сделок из базы данных...");
+    // Load data
+    console.log("📊 Loading trades from database...");
     const trades = databaseService.getAllTrades();
     const tradingInfoFromDb = databaseService.getTradingInfo();
     const openTrades = trades.filter((t) => t.is_open === 1);
     const closedTrades = trades.filter((t) => t.is_open === 0);
     console.log(
-      `📊 Найдено сделок: ${trades.length} (открытых: ${openTrades.length}, закрытых: ${closedTrades.length})`,
+      `📊 Trades found: ${trades.length} (open: ${openTrades.length}, closed: ${closedTrades.length})`,
     );
 
     if (closedTrades.length === 0) {
-      console.log("⚠️  Нет закрытых сделок для анализа");
+      console.log("⚠️  No closed trades available for analysis");
       return;
     }
 
-    // Анализ данных
-    console.log("🔍 Анализ сделок...");
+    // Analyze data
+    console.log("🔍 Analyzing trades...");
     const statistics = await tradeAnalyzer.calculateStatistics(closedTrades);
     const pairStats = tradeAnalyzer.calculatePairStatistics(closedTrades);
     const tagStats = tradeAnalyzer.calculateEnterTagStatistics(closedTrades);
@@ -50,43 +62,43 @@ async function main() {
       initialCapital,
     );
     
-    // Создаем отдельный объект для отчета, чтобы представить статистику в желаемом формате
+    // Compose report statistics payload
     const reportStatistics = {
-      ...statistics, // Базовые статистики по закрытым сделкам
-      drawdown: drawdown, // Добавляем данные по просадке
+      ...statistics, // Base metrics from closed trades
+      drawdown: drawdown, // Drawdown metrics
       sharpeRatio,
       sortinoRatio,
     };
 
-    // Вывод ключевых метрик в консоль
-    console.log('--- Общая статистика ---');
-    console.log(`- Всего сделок: ${reportStatistics.totalTrades}`);
-    console.log(`- Профитных/Убыточных: ${reportStatistics.profitableTrades}/${reportStatistics.losingTrades}`);
-    console.log(`- Винрейт: ${reportStatistics.winRate.toFixed(2)}%`);
-    console.log(`- Общий профит: ${reportStatistics.totalProfit.toFixed(2)}`);
+    // Print key metrics to console
+    console.log("--- Overall stats ---");
+    console.log(`- Total trades: ${reportStatistics.totalTrades}`);
+    console.log(`- Profitable/Losing: ${reportStatistics.profitableTrades}/${reportStatistics.losingTrades}`);
+    console.log(`- Win rate: ${reportStatistics.winRate.toFixed(2)}%`);
+    console.log(`- Total profit: ${reportStatistics.totalProfit.toFixed(2)}`);
     console.log(`- Profit Factor: ${reportStatistics.profitFactor.toFixed(2)}`);
     console.log(`- Expectancy: ${reportStatistics.expectancy.toFixed(2)}`);
     if (reportStatistics.drawdown) {
-      console.log(`- Макс. просадка: ${reportStatistics.drawdown.maxDrawdown.toFixed(2)}% (${reportStatistics.drawdown.maxDrawdownAbs.toFixed(2)})`);
+      console.log(`- Max drawdown: ${reportStatistics.drawdown.maxDrawdown.toFixed(2)}% (${reportStatistics.drawdown.maxDrawdownAbs.toFixed(2)})`);
     }
     console.log(`- Sharpe Ratio: ${reportStatistics.sharpeRatio.toFixed(3)}`);
     console.log(`- Sortino Ratio: ${reportStatistics.sortinoRatio.toFixed(3)}`);
-    if (reportStatistics.buyAndHoldReturn) {
-      console.log(`- Доходность Buy & Hold (BTC): ${reportStatistics.buyAndHoldReturn.toFixed(2)}%`);
+    if (reportStatistics.buyAndHoldReturn !== undefined) {
+      console.log(`- Buy & Hold return (BTC): ${reportStatistics.buyAndHoldReturn.toFixed(2)}%`);
     }
-    console.log(`- Общее проскальзывание: ${reportStatistics.totalSlippage.toFixed(2)}`);
-    console.log(`- Среднее проскальзывание: ${reportStatistics.averageSlippage.toFixed(2)}`);
-    console.log('------------------------');
+    console.log(`- Total slippage: ${(reportStatistics.totalSlippage ?? 0).toFixed(2)}`);
+    console.log(`- Average slippage: ${(reportStatistics.averageSlippage ?? 0).toFixed(2)}`);
+    console.log("------------------------");
 
 
-    // Формируем полный объект с информацией о торговле
+    // Build complete trading info payload
     const tradingInfo = {
       ...tradingInfoFromDb,
       initialCapital,
     };
 
-    // Генерация отчета
-    console.log("📝 Генерация отчета...");
+    // Generate report
+    console.log("📝 Generating report...");
     const markdown = reportGenerator.generate(
       trades,
       reportStatistics,
@@ -97,17 +109,17 @@ async function main() {
       tradingInfo
     );
 
-    // Сохранение отчета
+    // Save report
     await Bun.write(outputPath, markdown);
-    console.log(`✅ Отчет сохранён в ${outputPath}`);
+    console.log(`✅ Report saved to ${outputPath}`);
   } catch (error) {
-    console.error("❌ Ошибка:", error);
+    console.error("❌ Error:", error);
     throw error;
   } finally {
-    // Закрытие соединения с базой данных
+    // Close database connection
     databaseService.close();
   }
 }
 
-// Запуск приложения
+// Run application
 main().catch(console.error);

@@ -1,19 +1,58 @@
-import type { Trade, TradeStatistics, PairStatistics, PairStatisticsReport, Drawdown, EnterTagStatistics, EnterTagStatisticsReport } from "../types/trade.types";
-import { MarketDataService } from "../services/MarketDataService";
+import type {
+  Trade,
+  TradeStatistics,
+  PairStatisticsReport,
+  Drawdown,
+  EnterTagStatisticsReport,
+} from "../types/trade.types";
+import type { HistoricalPriceProvider } from "../types/market.types";
+import {
+  calculatePairStatistics as calculatePairStatisticsMetric,
+  calculateEnterTagStatistics as calculateEnterTagStatisticsMetric,
+  sortByProfit as sortByProfitMetric,
+  getTopProfitable as getTopProfitableMetric,
+  getTopLosing as getTopLosingMetric,
+} from "./metrics/reportMetrics";
+import {
+  calculateMaxDrawdown as calculateMaxDrawdownMetric,
+  calculateSharpeAndSortinoRatios as calculateSharpeAndSortinoRatiosMetric,
+  calculateExposure,
+} from "./metrics/riskMetrics";
 
 /**
- * Анализатор сделок
- * Следует принципу Single Responsibility - отвечает только за анализ и вычисление статистики
+ * Trade analyzer.
+ * Follows Single Responsibility for analytics and metric calculations.
  */
 export class TradeAnalyzer {
+  constructor(
+    private readonly marketDataProvider?: HistoricalPriceProvider,
+    private readonly benchmarkPair: string = "BTC/USDT",
+  ) {}
+
   /**
-   * Вычисляет общую статистику по всем сделкам
-   * @param trades Массив сделок
-   * @returns Объект со статистикой
+   * Computes overall statistics for all trades.
+   * @param trades Trade list
+   * @returns Statistics object
    */
   async calculateStatistics(trades: Trade[]): Promise<TradeStatistics> {
     if (trades.length === 0) {
-      return { /* return empty/default stats */ };
+      return {
+        totalTrades: 0,
+        profitableTrades: 0,
+        losingTrades: 0,
+        totalProfit: 0,
+        avgProfit: 0,
+        winRate: 0,
+        totalFees: 0,
+        profitFactor: 1,
+        expectancy: 0,
+        maxOpenTrades: 0,
+        maxExposureAmount: 0,
+        totalSlippage: 0,
+        averageSlippage: 0,
+        avgProfitPerHourPct: 0,
+        avgFeePct: 0,
+      };
     }
     const totalTrades = trades.length;
     const profitableTrades = trades.filter(t => (t.close_profit_abs || 0) > 0).length;
@@ -72,36 +111,17 @@ export class TradeAnalyzer {
 
     const avgProfitPerHourPct = totalDurationMinutes > 0 ? (totalProfitPct * 100 / totalDurationMinutes) * 60 : 0;
 
-    const profitableTradesWithProfit = trades.filter(t => t.close_profit_abs && t.close_profit_abs > 0);
+    const profitableTradesWithProfit = trades.filter(
+      (t): t is Trade & { close_profit_abs: number } =>
+        typeof t.close_profit_abs === "number" && t.close_profit_abs > 0,
+    );
     const totalFeesOnProfitable = profitableTradesWithProfit.reduce((sum, t) => sum + (t.fee_open_cost || 0) + (t.fee_close_cost || 0), 0);
     const totalProfitOnProfitable = profitableTradesWithProfit.reduce((sum, t) => sum + t.close_profit_abs, 0);
     const avgFeePct = totalProfitOnProfitable > 0 ? (totalFeesOnProfitable / totalProfitOnProfitable) * 100 : 0;
 
-    const { maxOpenTrades, maxExposureAmount } = this._calculateExposure(trades);
+    const { maxOpenTrades, maxExposureAmount } = calculateExposure(trades);
 
-    // Calculate Buy & Hold return
-    let buyAndHoldReturn = 0;
-    const sortedByOpenDate = [...trades].sort((a, b) => new Date(a.open_date).getTime() - new Date(b.open_date).getTime());
-    const firstTradeDate = new Date(sortedByOpenDate[0].open_date);
-    const lastTrade = [...trades].sort((a,b) => new Date(a.close_date).getTime() - new Date(b.close_date).getTime()).pop();
-    
-    if (lastTrade && lastTrade.close_date) {
-        const lastTradeDate = new Date(lastTrade.close_date);
-        const marketDataService = new MarketDataService();
-        const benchmarkPair = 'BTC/USDT'; // Hardcoded for now
-
-        try {
-            const startPrice = await marketDataService.getHistoricalPrice(benchmarkPair, firstTradeDate);
-            const endPrice = await marketDataService.getHistoricalPrice(benchmarkPair, lastTradeDate);
-
-            if (startPrice > 0) {
-                buyAndHoldReturn = ((endPrice - startPrice) / startPrice) * 100;
-            }
-        } catch (error) {
-            console.warn(`\n⚠️ Could not calculate Buy & Hold return: ${(error as Error).message}`);
-            buyAndHoldReturn = 0; // Gracefully handle error
-        }
-    }
+    const buyAndHoldReturn = await this.calculateBuyAndHoldReturn(trades);
 
 
     return {
@@ -124,255 +144,121 @@ export class TradeAnalyzer {
     };
   }
 
+  private async calculateBuyAndHoldReturn(trades: Trade[]): Promise<number | undefined> {
+    if (!this.marketDataProvider || trades.length === 0) {
+      return undefined;
+    }
+
+    const sortedByOpenDate = [...trades].sort(
+      (a, b) => new Date(a.open_date).getTime() - new Date(b.open_date).getTime(),
+    );
+    const firstTrade = sortedByOpenDate[0];
+    if (!firstTrade) {
+      return undefined;
+    }
+
+    const closedTrades = trades.filter(
+      (trade): trade is Trade & { close_date: string } => typeof trade.close_date === "string",
+    );
+    if (closedTrades.length === 0) {
+      return undefined;
+    }
+
+    const lastTrade = closedTrades.sort(
+      (a, b) => new Date(a.close_date).getTime() - new Date(b.close_date).getTime(),
+    )[closedTrades.length - 1];
+    if (!lastTrade) {
+      return undefined;
+    }
+
+    try {
+      const startPrice = await this.marketDataProvider.getHistoricalPrice(
+        this.benchmarkPair,
+        new Date(firstTrade.open_date),
+      );
+      const endPrice = await this.marketDataProvider.getHistoricalPrice(
+        this.benchmarkPair,
+        new Date(lastTrade.close_date),
+      );
+
+      if (startPrice <= 0) {
+        return undefined;
+      }
+
+      return ((endPrice - startPrice) / startPrice) * 100;
+    } catch (error) {
+      console.warn(`\n⚠️ Could not calculate Buy & Hold return: ${(error as Error).message}`);
+      return undefined;
+    }
+  }
+
   /**
-   * Группирует статистику по торговым парам
-   * @param trades Массив сделок
-   * @returns Массив статистики по парам
+   * Groups statistics by trading pair.
+   * @param trades Trade list
+   * @returns Pair statistics list
    */
   calculatePairStatistics(trades: Trade[]): PairStatisticsReport[] {
-    const pairStatsMap = new Map<string, PairStatistics>();
-
-    for (const trade of trades) {
-      const stats = pairStatsMap.get(trade.pair) || { count: 0, profit: 0, wins: 0 };
-      stats.count++;
-      stats.profit += trade.close_profit_abs || 0;
-      if ((trade.close_profit_abs || 0) > 0) {
-        stats.wins++;
-      }
-      pairStatsMap.set(trade.pair, stats);
-    }
-
-    return Array.from(pairStatsMap.entries()).map(([pair, stats]) => ({
-      pair,
-      stats
-    }));
+    return calculatePairStatisticsMetric(trades);
   }
 
   /**
-   * Группирует статистику по тегам входа
-   * @param trades Массив сделок
-   * @returns Массив статистики по тегам
+   * Groups statistics by entry tags.
+   * @param trades Trade list
+   * @returns Entry tag statistics list
    */
   calculateEnterTagStatistics(trades: Trade[]): EnterTagStatisticsReport[] {
-    const tagStatsMap = new Map<string, EnterTagStatistics>();
-
-    for (const trade of trades) {
-      if (!trade.enter_tag) continue;
-
-      // Freqtrade может иметь несколько тегов, разделенных пробелом
-      const tags = trade.enter_tag.split(' ');
-
-      for (const tag of tags) {
-        if (!tag) continue; // Пропускаем пустые теги, если есть двойные пробелы
-
-        const stats = tagStatsMap.get(tag) || { count: 0, wins: 0, totalProfit: 0 };
-        stats.count++;
-        stats.totalProfit += trade.close_profit_abs || 0;
-        if ((trade.close_profit_abs || 0) > 0) {
-          stats.wins++;
-        }
-        tagStatsMap.set(tag, stats);
-      }
-    }
-
-    return Array.from(tagStatsMap.entries()).map(([tag, stats]) => ({
-      tag,
-      stats
-    })).sort((a, b) => b.stats.count - a.stats.count); // Сортируем по количеству сделок
+    return calculateEnterTagStatisticsMetric(trades);
   }
 
 
   /**
-   * Рассчитывает максимальную просадку по балансу.
-   * @param trades Массив **закрытых** сделок.
-   * @param initialCapital Начальный капитал.
-   * @returns Объект с данными о просадке.
+   * Calculates maximum drawdown on balance.
+   * @param trades List of **closed** trades.
+   * @param initialCapital Initial capital.
+   * @returns Drawdown metrics object.
    */
   calculateMaxDrawdown(trades: Trade[], initialCapital: number): Drawdown {
-    // Сортируем сделки по дате закрытия, так как просадка по балансу считается в момент фиксации прибыли/убытка.
-    const sortedTrades = [...trades].sort((a, b) => {
-      if (!a.close_date || !b.close_date) return 0;
-      return new Date(a.close_date).getTime() - new Date(b.close_date).getTime()
-    }
-    );
-
-    let balance = initialCapital;
-    let peakBalance = initialCapital;
-    let maxDrawdownAbs = 0;
-
-    for (const trade of sortedTrades) {
-      if (trade.close_profit_abs) {
-        balance += trade.close_profit_abs;
-      }
-
-      if (balance > peakBalance) {
-        peakBalance = balance;
-      }
-
-      const drawdown = peakBalance - balance;
-      if (drawdown > maxDrawdownAbs) {
-        maxDrawdownAbs = drawdown;
-      }
-    }
-
-    const maxDrawdown = peakBalance > 0 ? (maxDrawdownAbs / peakBalance) * 100 : 0;
-
-    return {
-      maxDrawdown,
-      maxDrawdownAbs,
-      peakBalance
-    };
+    return calculateMaxDrawdownMetric(trades, initialCapital);
   }
 
   /**
-   * Сортирует сделки по прибыли (от максимальной к минимальной)
-   * @param trades Массив сделок
-   * @returns Отсортированный массив сделок
+   * Sorts trades by absolute profit (descending).
+   * @param trades Trade list
+   * @returns Sorted trade list
    */
   sortByProfit(trades: Trade[]): Trade[] {
-    return [...trades].sort((a, b) =>
-      (b.close_profit_abs || 0) - (a.close_profit_abs || 0)
-    );
+    return sortByProfitMetric(trades);
   }
 
   /**
-   * Получает топ N прибыльных сделок
-   * @param trades Массив сделок
-   * @param count Количество сделок
-   * @returns Массив топ прибыльных сделок
+   * Returns top N profitable trades.
+   * @param trades Trade list
+   * @param count Number of trades
+   * @returns Top profitable trades
    */
   getTopProfitable(trades: Trade[], count: number = 3): Trade[] {
-    const sorted = this.sortByProfit(trades);
-    return sorted.slice(0, Math.min(count, sorted.length));
+    return getTopProfitableMetric(trades, count);
   }
 
   /**
-   * Получает топ N убыточных сделок
-   * @param trades Массив сделок
-   * @param count Количество сделок
-   * @returns Массив топ убыточных сделок
+   * Returns top N losing trades.
+   * @param trades Trade list
+   * @param count Number of trades
+   * @returns Top losing trades
    */
   getTopLosing(trades: Trade[], count: number = 3): Trade[] {
-    const sorted = this.sortByProfit(trades);
-    const startIndex = Math.max(0, sorted.length - count);
-    return sorted.slice(startIndex).reverse();
+    return getTopLosingMetric(trades, count);
   }
 
   /**
-   * Рассчитывает коэффициенты Шарпа и Сортино.
-   * Расчет основан на доходности каждой отдельной сделки, а не на временном ряде эквити.
-   * @param trades Массив закрытых сделок.
-   * @param initialCapital Начальный капитал.
-   * @param riskFreeRate Безрисковая ставка для расчета. По умолчанию 0.
-   * @returns Объект с коэффициентами.
+   * Calculates Sharpe and Sortino ratios.
+   * Uses per-trade returns instead of a full equity time series.
+   * @param trades List of closed trades.
+   * @param initialCapital Initial capital.
+   * @param riskFreeRate Risk-free rate (default: 0).
+   * @returns Ratios object.
    */
   calculateSharpeAndSortinoRatios(trades: Trade[], initialCapital: number, riskFreeRate: number = 0): { sharpeRatio: number; sortinoRatio: number; } {
-    if (trades.length < 2) {
-      return { sharpeRatio: 0, sortinoRatio: 0 };
-    }
-
-    const sortedTrades = [...trades].sort((a, b) => {
-      if (!a.close_date || !b.close_date) return 0;
-      return new Date(a.close_date).getTime() - new Date(b.close_date).getTime();
-    });
-
-    const returns: number[] = [];
-    let balance = initialCapital;
-
-    for (const trade of sortedTrades) {
-      const profit = trade.close_profit_abs || 0;
-      // Доходность считаем относительно баланса *перед* закрытием этой сделки
-      const tradeReturn = balance > 0 ? profit / balance : 0;
-      returns.push(tradeReturn);
-      // Обновляем баланс
-      balance += profit;
-    }
-
-    const avgReturn = this._calculateAverage(returns);
-    const stdDev = this._calculateStdDev(returns, avgReturn);
-    const downsideStdDev = this._calculateDownsideStdDev(returns, riskFreeRate);
-
-    const sharpeRatio = stdDev > 0 ? (avgReturn - riskFreeRate) / stdDev : 0;
-    const sortinoRatio = downsideStdDev > 0
-      ? (avgReturn - riskFreeRate) / downsideStdDev
-      : ((avgReturn - riskFreeRate) > 0 ? Infinity : 0);
-
-    return { sharpeRatio, sortinoRatio };
-  }
-
-  private _calculateAverage(numbers: number[]): number {
-    if (numbers.length === 0) return 0;
-    const sum = numbers.reduce((acc, val) => acc + val, 0);
-    return sum / numbers.length;
-  }
-
-  private _calculateStdDev(numbers: number[], avg: number): number {
-    if (numbers.length < 2) return 0;
-    const variance = numbers.reduce((acc, val) => acc + Math.pow(val - avg, 2), 0) / (numbers.length -1);
-    return Math.sqrt(variance);
-  }
-
-  private _calculateDownsideStdDev(numbers: number[], target: number): number {
-    const negativeReturns = numbers.filter(r => r < target);
-    if (negativeReturns.length < 2) return 0;
-
-    const squaredDiffs = negativeReturns.map(r => Math.pow(r - target, 2));
-    const sumOfSquaredDiffs = squaredDiffs.reduce((acc, val) => acc + val, 0);
-
-    // Используем N-1 для несмещенной оценки, как и в общем стандартном отклонении
-    return Math.sqrt(sumOfSquaredDiffs / (negativeReturns.length - 1));
-  }
-
-  /**
-   * Рассчитывает максимальное количество одновременно открытых сделок
-   * и максимальную сумму задействованного капитала (exposure).
-   * @param trades Массив сделок.
-   * @returns Объект с максимальным количеством открытых сделок и максимальным капиталом.
-   */
-  private _calculateExposure(trades: Trade[]): { maxOpenTrades: number; maxExposureAmount: number } {
-    interface TradeEvent {
-      date: Date;
-      type: 'open' | 'close';
-      stake: number;
-    }
-
-    const events: TradeEvent[] = [];
-
-    for (const trade of trades) {
-      events.push({ date: new Date(trade.open_date), type: 'open', stake: trade.stake_amount });
-      if (trade.close_date) {
-        events.push({ date: new Date(trade.close_date), type: 'close', stake: trade.stake_amount });
-      }
-    }
-
-    // Сортируем события. Сначала по дате. Если даты равны, "close" идет раньше "open".
-    events.sort((a, b) => {
-      if (a.date.getTime() === b.date.getTime()) {
-        if (a.type === 'close' && b.type === 'open') return -1; // close before open
-        if (a.type === 'open' && b.type === 'close') return 1;  // open after close
-        return 0;
-      }
-      return a.date.getTime() - b.date.getTime();
-    });
-
-    let currentOpenTrades = 0;
-    let currentExposureAmount = 0;
-    let maxOpenTrades = 0;
-    let maxExposureAmount = 0;
-
-    for (const event of events) {
-      if (event.type === 'open') {
-        currentOpenTrades++;
-        currentExposureAmount += event.stake;
-      } else { // event.type === 'close'
-        currentOpenTrades--;
-        currentExposureAmount -= event.stake;
-      }
-
-      maxOpenTrades = Math.max(maxOpenTrades, currentOpenTrades);
-      maxExposureAmount = Math.max(maxExposureAmount, currentExposureAmount);
-    }
-
-    return { maxOpenTrades, maxExposureAmount };
+    return calculateSharpeAndSortinoRatiosMetric(trades, initialCapital, riskFreeRate);
   }
 }

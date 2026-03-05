@@ -2,22 +2,22 @@ import { Database } from "bun:sqlite";
 import type { Trade, Order, TradingInfo } from "../types/trade.types";
 
 /**
- * Сервис для работы с базой данных Freqtrade
- * Следует принципу Single Responsibility - отвечает только за доступ к данным
+ * Freqtrade database access service.
+ * Follows Single Responsibility by handling data access only.
  */
 export class DatabaseService {
   private db: Database;
 
   /**
-   * @param dbPath Путь к файлу базы данных SQLite
+   * @param dbPath Path to SQLite database file
    */
   constructor(dbPath: string) {
     this.db = new Database(dbPath, { readonly: true });
   }
 
   /**
-   * Получает все сделки из базы данных (открытые и закрытые)
-   * @returns Массив сделок
+   * Fetches all trades from database (open and closed).
+   * @returns Trade list
    */
   getAllTrades(): Trade[] {
     const tradesQuery = this.db.query<Trade, []>(`
@@ -33,7 +33,7 @@ export class DatabaseService {
 
     const trades = tradesQuery.all();
 
-    // Загружаем ордера для каждой сделки
+    // Load orders for each trade
     for (const trade of trades) {
       trade.orders = this.getOrdersForTrade(trade.id);
     }
@@ -42,8 +42,8 @@ export class DatabaseService {
   }
 
   /**
-   * Получает общую информацию о торговле
-   * @returns Информация о стратегии, режиме торговли и бирже
+   * Fetches high-level trading information.
+   * @returns Strategy, trading mode and exchange details
    */
   getTradingInfo(): TradingInfo {
     const infoQuery = this.db.query<{
@@ -73,9 +73,9 @@ export class DatabaseService {
   }
 
   /**
-   * Получает все ордера для конкретной сделки
-   * @param tradeId ID сделки
-   * @returns Массив ордеров
+   * Fetches all orders for a specific trade.
+   * @param tradeId Trade ID
+   * @returns Order list
    */
   private getOrdersForTrade(tradeId: number): Order[] {
     const ordersQuery = this.db.query<Order, [number]>(`
@@ -93,7 +93,7 @@ export class DatabaseService {
   }
 
   /**
-   * Закрывает соединение с базой данных
+   * Closes database connection.
    */
   close(): void {
     this.db.close();

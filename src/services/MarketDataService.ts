@@ -1,68 +1,107 @@
-import * as ccxt from 'ccxt';
+import type { HistoricalPriceProvider } from "../types/market.types";
 
 /**
- * A service to fetch market data from cryptocurrency exchanges.
+ * Service for loading historical prices via CCXT.
+ * CCXT is imported lazily so core analysis can run without network dependencies.
  */
-export class MarketDataService {
-    // Initialize the exchange. We can make this configurable later.
-    private exchange: ccxt.Exchange;
+export class MarketDataService implements HistoricalPriceProvider {
+  constructor(private readonly exchangeId: string = "binance") {}
 
-    constructor(exchangeId: string = 'binance') {
-        if (!ccxt.pro.exchanges.includes(exchangeId)) {
-            throw new Error(`Exchange '${exchangeId}' is not supported by CCXT.`);
-        }
-        this.exchange = new (ccxt.pro as any)[exchangeId]();
+  private async createExchange(): Promise<any> {
+    const ccxtModule = await import("ccxt");
+    const ccxt = ccxtModule as Record<string, unknown>;
+    const ExchangeCtor = ccxt[this.exchangeId];
+    if (typeof ExchangeCtor !== "function") {
+      throw new Error(`Exchange '${this.exchangeId}' is not supported by CCXT.`);
+    }
+    return new (ExchangeCtor as new () => any)();
+  }
+
+  /**
+   * Returns daily close price for the requested date.
+   */
+  async getHistoricalPrice(pair: string, date: Date): Promise<number> {
+    const exchange = await this.createExchange();
+    const startOfDay = new Date(date);
+    startOfDay.setUTCHours(0, 0, 0, 0);
+
+    try {
+      const timeframe = "1d";
+      const primaryCandles = await exchange.fetchOHLCV(
+        pair,
+        timeframe,
+        startOfDay.getTime(),
+        1,
+      );
+      const primaryClose = this.extractClosePrice(primaryCandles);
+      if (primaryClose !== undefined) {
+        return primaryClose;
+      }
+
+      const oneDayMs = 24 * 60 * 60 * 1000;
+      const nearbyCandles = await exchange.fetchOHLCV(
+        pair,
+        timeframe,
+        startOfDay.getTime() - oneDayMs,
+        3,
+      );
+      const closestClose = this.extractClosestClosePrice(
+        nearbyCandles,
+        startOfDay.getTime(),
+      );
+      if (closestClose !== undefined) {
+        return closestClose;
+      }
+
+      throw new Error(`No OHLCV data found for ${pair} around ${date.toISOString()}`);
+    } catch (error) {
+      console.error(`Error fetching historical price from ${exchange.id}:`, error);
+      throw error;
+    } finally {
+      if (typeof exchange.close === "function") {
+        await exchange.close();
+      }
+    }
+  }
+
+  private extractClosePrice(candles: unknown): number | undefined {
+    if (!Array.isArray(candles) || candles.length === 0) {
+      return undefined;
     }
 
-    /**
-     * Fetches the closing price of a trading pair for a specific date.
-     * It retrieves the daily OHLCV data for the given date and returns the close price.
-     * @param pair The trading pair (e.g., 'BTC/USDT').
-     * @param date The date for which to fetch the price.
-     * @returns The closing price.
-     */
-    public async getHistoricalPrice(pair: string, date: Date): Promise<number> {
-        // CCXT uses a 'since' timestamp in milliseconds.
-        // To get the candle for a specific day, we can set the time to the beginning of that day.
-        const startOfDay = new Date(date);
-        startOfDay.setUTCHours(0, 0, 0, 0);
-
-        const timeframe = '1d'; // Daily timeframe
-        const limit = 1; // We only need one candle
-
-        try {
-            console.log(`Fetching historical price for ${pair} on ${startOfDay.toISOString()}...`);
-            const ohlcv = await this.exchange.fetchOHLCV(pair, timeframe, startOfDay.getTime(), limit);
-
-            if (ohlcv && ohlcv.length > 0) {
-                const closePrice = ohlcv[0][4]; // [timestamp, open, high, low, close, volume]
-                console.log(`Found close price: ${closePrice}`);
-                return closePrice;
-            } else {
-                // If no candle was found for the exact start of the day,
-                // let's try fetching a range and finding the closest one.
-                // This can happen due to timezone differences or exchange data availability.
-                console.log(`No candle found at the exact start of the day. Fetching a broader range...`);
-                const oneDay = 24 * 60 * 60 * 1000;
-                const broaderOhlcv = await this.exchange.fetchOHLCV(pair, timeframe, startOfDay.getTime() - oneDay, 3);
-                const targetTimestamp = startOfDay.getTime();
-
-                const closestCandle = broaderOhlcv.reduce((prev, curr) => {
-                    return (Math.abs(curr[0] - targetTimestamp) < Math.abs(prev[0] - targetTimestamp) ? curr : prev);
-                });
-
-                if (closestCandle) {
-                     const closePrice = closestCandle[4];
-                     console.log(`Found closest candle price: ${closePrice}`);
-                     return closePrice;
-                }
-
-                throw new Error(`No OHLCV data found for ${pair} around ${date.toISOString()}`);
-            }
-        } catch (error) {
-            console.error(`Error fetching historical price from ${this.exchange.id}:`, error);
-            // Re-throw the error to be handled by the caller
-            throw error;
-        }
+    const first = candles[0];
+    if (!Array.isArray(first)) {
+      return undefined;
     }
+
+    const close = first[4];
+    return typeof close === "number" ? close : undefined;
+  }
+
+  private extractClosestClosePrice(
+    candles: unknown,
+    targetTimestamp: number,
+  ): number | undefined {
+    if (!Array.isArray(candles) || candles.length === 0) {
+      return undefined;
+    }
+
+    const validCandles = candles.filter(
+      (candle): candle is [number, unknown, unknown, unknown, number] =>
+        Array.isArray(candle) &&
+        typeof candle[0] === "number" &&
+        typeof candle[4] === "number",
+    );
+    if (validCandles.length === 0) {
+      return undefined;
+    }
+
+    const closest = validCandles.reduce((prev, curr) =>
+      Math.abs(curr[0] - targetTimestamp) < Math.abs(prev[0] - targetTimestamp)
+        ? curr
+        : prev,
+    );
+
+    return closest[4];
+  }
 }

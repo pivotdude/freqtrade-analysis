@@ -1,5 +1,5 @@
 /**
- * Интерфейс для ордера
+ * Order interface
  */
 export interface Order {
   id: number;
@@ -24,7 +24,7 @@ export interface Order {
 }
 
 /**
- * Интерфейс для данных сделки из базы данных
+ * Trade data interface from database
  */
 export interface Trade {
   id: number;
@@ -53,7 +53,7 @@ export interface Trade {
 }
 
 /**
- * Статистика по торговой паре
+ * Trading pair statistics
  */
 export interface PairStatistics {
   count: number;
@@ -62,16 +62,16 @@ export interface PairStatistics {
 }
 
 /**
- * Результат расчета просадки
+ * Drawdown calculation result
  */
 export interface Drawdown {
-  maxDrawdown: number; // в процентах
-  maxDrawdownAbs: number; // в абсолютном значении
-  peakBalance: number; // максимальное значение баланса
+  maxDrawdown: number; // percentage
+  maxDrawdownAbs: number; // absolute value
+  peakBalance: number; // peak balance value
 }
 
 /**
- * Общая статистика по сделкам
+ * Overall trade statistics
  */
 export interface TradeStatistics {
   totalTrades: number; // Closed trades
@@ -96,7 +96,7 @@ export interface TradeStatistics {
 }
 
 /**
- * Общая информация о торговле
+ * General trading information
  */
 export interface TradingInfo {
   strategy: string;
@@ -107,7 +107,7 @@ export interface TradingInfo {
 }
 
 /**
- * Статистика по парам для отчета
+ * Pair statistics report record
  */
 export interface PairStatisticsReport {
   pair: string;
@@ -115,7 +115,7 @@ export interface PairStatisticsReport {
 }
 
 /**
- * Статистика по тегам входа
+ * Entry tag statistics
  */
 export interface EnterTagStatistics {
   count: number;
@@ -124,7 +124,7 @@ export interface EnterTagStatistics {
 }
 
 /**
- * Статистика по тегам для отчета
+ * Entry tag statistics report record
  */
 export interface EnterTagStatisticsReport {
   tag: string;
