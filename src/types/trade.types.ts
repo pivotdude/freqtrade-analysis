@@ -103,7 +103,8 @@ export interface TradingInfo {
   tradingMode: string;
   exchange: string;
   firstTradeDate: string;
-  initialCapital?: number;
+  capitalBaseline?: number;
+  capitalBaselineSource?: "manual" | "auto";
 }
 
 /**

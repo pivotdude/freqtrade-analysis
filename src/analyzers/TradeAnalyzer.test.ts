@@ -157,4 +157,30 @@ describe("TradeAnalyzer", () => {
     expect(Number.isFinite(ratios.sharpeRatio)).toBe(true);
     expect(Number.isFinite(ratios.sortinoRatio)).toBe(true);
   });
+
+  it("estimates capital baseline from max concurrent exposure", () => {
+    const analyzer = new TradeAnalyzer();
+    const trades: Trade[] = [
+      createTrade({
+        id: 1,
+        open_date: "2024-01-01T00:00:00Z",
+        close_date: "2024-01-01T03:00:00Z",
+        stake_amount: 1000,
+      }),
+      createTrade({
+        id: 2,
+        open_date: "2024-01-01T01:00:00Z",
+        close_date: "2024-01-01T04:00:00Z",
+        stake_amount: 500,
+      }),
+      createTrade({
+        id: 3,
+        open_date: "2024-01-01T05:00:00Z",
+        close_date: "2024-01-01T06:00:00Z",
+        stake_amount: 250,
+      }),
+    ];
+
+    expect(analyzer.estimateCapitalBaseline(trades)).toBe(1500);
+  });
 });

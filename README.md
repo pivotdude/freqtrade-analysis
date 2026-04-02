@@ -41,7 +41,7 @@ Available variables:
 
 - `DB_PATH` - path to SQLite DB (default: `tradesv3.sqlite`)
 - `REPORT_PATH` - output report path (default: `trades_report.md`)
-- `INITIAL_CAPITAL` - initial capital for risk metrics (default: `9900`)
+- `INITIAL_CAPITAL` - capital baseline for percent/risk metrics, accepts a positive number or `auto` (default: `auto`)
 - `REPORT_LANG` - report language: `en` or `ru` (default: `en`)
 - `ENABLE_BENCHMARK` - enable Buy & Hold benchmark (`true/false`, default: `true`)
 - `BENCHMARK_PAIR` - benchmark pair (default: `BTC/USDT`)
@@ -55,7 +55,7 @@ Configuration priority: `CLI > .env > defaults`.
 bun run start -- \
   --db tradesv3.sqlite \
   --out trades_report.md \
-  --capital 10000 \
+  --capital auto \
   --lang en \
   --exchange binance \
   --benchmark BTC/USDT
@@ -63,12 +63,13 @@ bun run start -- \
 
 Flags:
 
-- `--db <path>` - database path
-- `--out <path>` - report path
-- `--capital <number>` - initial capital
-- `--lang <en|ru>` - report language
-- `--exchange <id>` - exchange id (for benchmark)
-- `--benchmark [pair]` - enable benchmark, optionally set pair
+- `--db <path>` - database path (default: `tradesv3.sqlite`)
+- `--out <path>` - report path (default: `trades_report.md`)
+- `--capital <number|auto>` - capital baseline for percent/risk metrics (default: `auto`)
+- `--no-capital` - disable capital-based metrics even if set in env
+- `--lang <en|ru>` - report language (default: `en`)
+- `--exchange <id>` - exchange id for benchmark (default: `binance`)
+- `--benchmark [pair]` - enable benchmark, optionally set pair (default: enabled, `BTC/USDT`)
 - `--no-benchmark` - disable benchmark calculation
 - `--help` - show help
 
@@ -165,6 +166,8 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for details.
 
 ## Metrics Limitations
 
+- `capital baseline` defaults to `auto`. Use `--no-capital` if you want to skip percent/risk metrics that depend on account balance.
+- `--capital auto` uses the maximum observed concurrent stake exposure as an estimate. This is not true wallet equity and does not include deposits/withdrawals.
 - `drawdown` is calculated from **closed** trades only, not a full equity-curve time series.
 - `sharpe` and `sortino` are calculated from per-trade returns, not a uniform time-series return stream.
 - `slippage` is calculated only from available order data; if some order fields are missing, the metric is incomplete.

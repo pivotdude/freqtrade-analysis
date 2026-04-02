@@ -47,8 +47,17 @@ export class MarkdownReportGenerator {
     md += `- **${this.t("Strategy", "Стратегия")}:** ${info.strategy}\n`;
     md += `- **${this.t("Exchange", "Биржа")}:** ${info.exchange}\n`;
     md += `- **${this.t("Trading Mode", "Режим торговли")}:** ${info.tradingMode.toUpperCase()}\n`;
-    if (info.initialCapital) {
-      md += `- **${this.t("Initial Capital", "Начальный капитал")}:** ${info.initialCapital.toFixed(2)} USDT\n`;
+    if (info.capitalBaseline) {
+      const capitalLabel = info.capitalBaselineSource === "auto"
+        ? this.t("Capital Baseline (estimated)", "База капитала (оценка)")
+        : this.t("Capital Baseline", "База капитала");
+      md += `- **${capitalLabel}:** ${info.capitalBaseline.toFixed(2)} USDT\n`;
+      if (info.capitalBaselineSource === "auto") {
+        md += `  - *${this.t(
+          "Calculated automatically as the maximum concurrent capital exposure observed across trades. This is an estimate, not the actual wallet balance.",
+          "Рассчитано автоматически как максимальная одновременно использованная сумма в сделках. Это оценка, а не реальный баланс кошелька.",
+        )}*\n`;
+      }
     }
     md += `- **${this.t("Trading Start", "Начало торговли")}:** ${this.dateFormatter.formatDate(info.firstTradeDate)}\n\n`;
     return md;
@@ -65,11 +74,11 @@ export class MarkdownReportGenerator {
     md += `- **${this.t("Profitable", "Прибыльных")}:** ${stats.profitableTrades} (${stats.winRate.toFixed(1)}%)\n`;
     md += `- **${this.t("Losing", "Убыточных")}:** ${stats.losingTrades}\n`;
 
-    const initialCapital = tradingInfo.initialCapital;
-    if (initialCapital && initialCapital > 0) {
-      const totalProfitPct = (stats.totalProfit / initialCapital) * 100;
+    const capitalBaseline = tradingInfo.capitalBaseline;
+    if (capitalBaseline && capitalBaseline > 0) {
+      const totalProfitPct = (stats.totalProfit / capitalBaseline) * 100;
       const netProfit = stats.totalProfit - stats.totalFees;
-      const netProfitPct = (netProfit / initialCapital) * 100;
+      const netProfitPct = (netProfit / capitalBaseline) * 100;
 
       md += `- **${this.t("Total Profit", "Общая прибыль")}:** ${stats.totalProfit.toFixed(2)} USDT (${totalProfitPct.toFixed(2)}%)\n`;
       md += `- **${this.t("Average Profit", "Средняя прибыль")}:** ${stats.avgProfit.toFixed(2)} USDT\n`;

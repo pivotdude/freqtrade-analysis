@@ -210,6 +210,16 @@ export class TradeAnalyzer {
     return calculateEnterTagStatisticsMetric(trades);
   }
 
+  /**
+   * Estimates a capital baseline from the maximum observed concurrent stake exposure.
+   * This is not account equity and does not account for deposits or withdrawals.
+   * @param trades Trade list, open and closed.
+   * @returns Estimated capital baseline or undefined when it cannot be inferred.
+   */
+  estimateCapitalBaseline(trades: Trade[]): number | undefined {
+    const { maxExposureAmount } = calculateExposure(trades);
+    return maxExposureAmount > 0 ? maxExposureAmount : undefined;
+  }
 
   /**
    * Calculates maximum drawdown on balance.

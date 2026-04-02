@@ -15,6 +15,7 @@ async function main() {
     dbPath,
     reportPath: outputPath,
     initialCapital,
+    capitalMode,
     reportLanguage,
     benchmarkPair,
     enableBenchmark,
@@ -53,22 +54,32 @@ async function main() {
     const tagStats = tradeAnalyzer.calculateEnterTagStatistics(closedTrades);
     const topProfitable = tradeAnalyzer.getTopProfitable(closedTrades, 3);
     const topLosing = tradeAnalyzer.getTopLosing(closedTrades, 3);
-    const drawdown = tradeAnalyzer.calculateMaxDrawdown(
-      closedTrades,
-      initialCapital,
-    );
-    const { sharpeRatio, sortinoRatio } = tradeAnalyzer.calculateSharpeAndSortinoRatios(
-      closedTrades,
-      initialCapital,
-    );
-    
+    const resolvedCapital = capitalMode === "manual"
+      ? initialCapital
+      : capitalMode === "auto"
+        ? tradeAnalyzer.estimateCapitalBaseline(trades)
+        : undefined;
+
     // Compose report statistics payload
     const reportStatistics = {
       ...statistics, // Base metrics from closed trades
-      drawdown: drawdown, // Drawdown metrics
-      sharpeRatio,
-      sortinoRatio,
     };
+
+    if (resolvedCapital && resolvedCapital > 0) {
+      const drawdown = tradeAnalyzer.calculateMaxDrawdown(
+        closedTrades,
+        resolvedCapital,
+      );
+      const { sharpeRatio, sortinoRatio } = tradeAnalyzer.calculateSharpeAndSortinoRatios(
+        closedTrades,
+        resolvedCapital,
+      );
+      Object.assign(reportStatistics, {
+        drawdown,
+        sharpeRatio,
+        sortinoRatio,
+      });
+    }
 
     // Print key metrics to console
     console.log("--- Overall stats ---");
@@ -78,11 +89,24 @@ async function main() {
     console.log(`- Total profit: ${reportStatistics.totalProfit.toFixed(2)}`);
     console.log(`- Profit Factor: ${reportStatistics.profitFactor.toFixed(2)}`);
     console.log(`- Expectancy: ${reportStatistics.expectancy.toFixed(2)}`);
+    if (resolvedCapital && resolvedCapital > 0) {
+      const capitalLabel = capitalMode === "auto" ? "Capital baseline (auto)" : "Capital baseline";
+      console.log(`- ${capitalLabel}: ${resolvedCapital.toFixed(2)}`);
+      if (capitalMode === "auto") {
+        console.log("- Capital baseline note: estimated from the maximum concurrent stake exposure across trades");
+      }
+    } else {
+      console.log("- Capital-based risk metrics: skipped (use --capital <amount> or --capital auto)");
+    }
     if (reportStatistics.drawdown) {
       console.log(`- Max drawdown: ${reportStatistics.drawdown.maxDrawdown.toFixed(2)}% (${reportStatistics.drawdown.maxDrawdownAbs.toFixed(2)})`);
     }
-    console.log(`- Sharpe Ratio: ${reportStatistics.sharpeRatio.toFixed(3)}`);
-    console.log(`- Sortino Ratio: ${reportStatistics.sortinoRatio.toFixed(3)}`);
+    if (reportStatistics.sharpeRatio !== undefined) {
+      console.log(`- Sharpe Ratio: ${reportStatistics.sharpeRatio.toFixed(3)}`);
+    }
+    if (reportStatistics.sortinoRatio !== undefined) {
+      console.log(`- Sortino Ratio: ${reportStatistics.sortinoRatio.toFixed(3)}`);
+    }
     if (reportStatistics.buyAndHoldReturn !== undefined) {
       console.log(`- Buy & Hold return (BTC): ${reportStatistics.buyAndHoldReturn.toFixed(2)}%`);
     }
@@ -94,7 +118,10 @@ async function main() {
     // Build complete trading info payload
     const tradingInfo = {
       ...tradingInfoFromDb,
-      initialCapital,
+      capitalBaseline: resolvedCapital,
+      capitalBaselineSource: capitalMode === "manual" || capitalMode === "auto"
+        ? capitalMode
+        : undefined,
     };
 
     // Generate report
