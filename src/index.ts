@@ -3,6 +3,34 @@ import { TradeAnalyzer } from "./analyzers/TradeAnalyzer";
 import { MarkdownReportGenerator } from "./generators/MarkdownReportGenerator";
 import { DateFormatter } from "./formatters/DateFormatter";
 import { CliUsageError, getHelpText, resolveRuntimeConfig } from "./config";
+import { normalizeOutputMode } from "./output/outputMode";
+import { ResultWriter } from "./output/ResultWriter";
+import { MarkdownReportRenderer } from "./renderers/MarkdownReportRenderer";
+import { JsonReportRenderer } from "./renderers/JsonReportRenderer";
+import { ToonReportRenderer } from "./renderers/ToonReportRenderer";
+import type {
+  AnalysisReportPayload,
+  ReportContentFormat,
+} from "./types/report.types";
+import type { TradeStatistics } from "./types/trade.types";
+
+function logInfo(message: string): void {
+  console.error(message);
+}
+
+function getRenderer(contentFormat: ReportContentFormat, language: "en" | "ru") {
+  switch (contentFormat) {
+    case "md": {
+      const dateFormatter = new DateFormatter(language);
+      const markdownGenerator = new MarkdownReportGenerator(dateFormatter, language);
+      return new MarkdownReportRenderer(markdownGenerator);
+    }
+    case "json":
+      return new JsonReportRenderer();
+    case "toon":
+      return new ToonReportRenderer();
+  }
+}
 
 /**
  * Main application function.
@@ -14,6 +42,7 @@ async function main() {
   const {
     dbPath,
     reportPath: outputPath,
+    format,
     initialCapital,
     capitalMode,
     reportLanguage,
@@ -28,27 +57,27 @@ async function main() {
     ? new (await import("./services/MarketDataService")).MarketDataService(exchangeId)
     : undefined;
   const tradeAnalyzer = new TradeAnalyzer(marketDataProvider, benchmarkPair);
-  const dateFormatter = new DateFormatter(reportLanguage);
-  const reportGenerator = new MarkdownReportGenerator(dateFormatter, reportLanguage);
+  const outputMode = normalizeOutputMode(format);
+  const resultWriter = new ResultWriter();
 
   try {
     // Load data
-    console.log("📊 Loading trades from database...");
+    logInfo("📊 Loading trades from database...");
     const trades = databaseService.getAllTrades();
     const tradingInfoFromDb = databaseService.getTradingInfo();
     const openTrades = trades.filter((t) => t.is_open === 1);
     const closedTrades = trades.filter((t) => t.is_open === 0);
-    console.log(
+    logInfo(
       `📊 Trades found: ${trades.length} (open: ${openTrades.length}, closed: ${closedTrades.length})`,
     );
 
     if (closedTrades.length === 0) {
-      console.log("⚠️  No closed trades available for analysis");
+      logInfo("⚠️  No closed trades available for analysis");
       return;
     }
 
     // Analyze data
-    console.log("🔍 Analyzing trades...");
+    logInfo("🔍 Analyzing trades...");
     const statistics = await tradeAnalyzer.calculateStatistics(closedTrades);
     const pairStats = tradeAnalyzer.calculatePairStatistics(closedTrades);
     const tagStats = tradeAnalyzer.calculateEnterTagStatistics(closedTrades);
@@ -61,7 +90,7 @@ async function main() {
         : undefined;
 
     // Compose report statistics payload
-    const reportStatistics = {
+    const reportStatistics: TradeStatistics = {
       ...statistics, // Base metrics from closed trades
     };
 
@@ -82,37 +111,37 @@ async function main() {
     }
 
     // Print key metrics to console
-    console.log("--- Overall stats ---");
-    console.log(`- Total trades: ${reportStatistics.totalTrades}`);
-    console.log(`- Profitable/Losing: ${reportStatistics.profitableTrades}/${reportStatistics.losingTrades}`);
-    console.log(`- Win rate: ${reportStatistics.winRate.toFixed(2)}%`);
-    console.log(`- Total profit: ${reportStatistics.totalProfit.toFixed(2)}`);
-    console.log(`- Profit Factor: ${reportStatistics.profitFactor.toFixed(2)}`);
-    console.log(`- Expectancy: ${reportStatistics.expectancy.toFixed(2)}`);
+    logInfo("--- Overall stats ---");
+    logInfo(`- Total trades: ${reportStatistics.totalTrades}`);
+    logInfo(`- Profitable/Losing: ${reportStatistics.profitableTrades}/${reportStatistics.losingTrades}`);
+    logInfo(`- Win rate: ${reportStatistics.winRate.toFixed(2)}%`);
+    logInfo(`- Total profit: ${reportStatistics.totalProfit.toFixed(2)}`);
+    logInfo(`- Profit Factor: ${reportStatistics.profitFactor.toFixed(2)}`);
+    logInfo(`- Expectancy: ${reportStatistics.expectancy.toFixed(2)}`);
     if (resolvedCapital && resolvedCapital > 0) {
       const capitalLabel = capitalMode === "auto" ? "Capital baseline (auto)" : "Capital baseline";
-      console.log(`- ${capitalLabel}: ${resolvedCapital.toFixed(2)}`);
+      logInfo(`- ${capitalLabel}: ${resolvedCapital.toFixed(2)}`);
       if (capitalMode === "auto") {
-        console.log("- Capital baseline note: estimated from the maximum concurrent stake exposure across trades");
+        logInfo("- Capital baseline note: estimated from the maximum concurrent stake exposure across trades");
       }
     } else {
-      console.log("- Capital-based risk metrics: skipped (use --capital <amount> or --capital auto)");
+      logInfo("- Capital-based risk metrics: skipped (use --capital <amount> or --capital auto)");
     }
     if (reportStatistics.drawdown) {
-      console.log(`- Max drawdown: ${reportStatistics.drawdown.maxDrawdown.toFixed(2)}% (${reportStatistics.drawdown.maxDrawdownAbs.toFixed(2)})`);
+      logInfo(`- Max drawdown: ${reportStatistics.drawdown.maxDrawdown.toFixed(2)}% (${reportStatistics.drawdown.maxDrawdownAbs.toFixed(2)})`);
     }
     if (reportStatistics.sharpeRatio !== undefined) {
-      console.log(`- Sharpe Ratio: ${reportStatistics.sharpeRatio.toFixed(3)}`);
+      logInfo(`- Sharpe Ratio: ${reportStatistics.sharpeRatio.toFixed(3)}`);
     }
     if (reportStatistics.sortinoRatio !== undefined) {
-      console.log(`- Sortino Ratio: ${reportStatistics.sortinoRatio.toFixed(3)}`);
+      logInfo(`- Sortino Ratio: ${reportStatistics.sortinoRatio.toFixed(3)}`);
     }
     if (reportStatistics.buyAndHoldReturn !== undefined) {
-      console.log(`- Buy & Hold return (BTC): ${reportStatistics.buyAndHoldReturn.toFixed(2)}%`);
+      logInfo(`- Buy & Hold return (BTC): ${reportStatistics.buyAndHoldReturn.toFixed(2)}%`);
     }
-    console.log(`- Total slippage: ${(reportStatistics.totalSlippage ?? 0).toFixed(2)}`);
-    console.log(`- Average slippage: ${(reportStatistics.averageSlippage ?? 0).toFixed(2)}`);
-    console.log("------------------------");
+    logInfo(`- Total slippage: ${(reportStatistics.totalSlippage ?? 0).toFixed(2)}`);
+    logInfo(`- Average slippage: ${(reportStatistics.averageSlippage ?? 0).toFixed(2)}`);
+    logInfo("------------------------");
 
     // Build complete trading info payload
     const tradingInfo = {
@@ -123,21 +152,27 @@ async function main() {
         : undefined,
     };
 
-    // Generate report
-    console.log("📝 Generating report...");
-    const markdown = reportGenerator.generate(
+    const reportPayload: AnalysisReportPayload = {
+      generatedAt: new Date().toISOString(),
+      language: reportLanguage,
       trades,
-      reportStatistics,
       pairStats,
       tagStats,
       topProfitable,
       topLosing,
-      tradingInfo
-    );
+      statistics: reportStatistics,
+      tradingInfo,
+    };
 
-    // Save report
-    await Bun.write(outputPath, markdown);
-    console.log(`✅ Report saved to ${outputPath}`);
+    // Generate report
+    logInfo("📝 Rendering report...");
+    const renderer = getRenderer(outputMode.content, reportLanguage);
+    const renderedContent = renderer.render(reportPayload);
+
+    await resultWriter.write(outputMode.delivery, renderedContent, outputPath);
+    if (outputMode.delivery === "file") {
+      logInfo(`✅ Report saved to ${outputPath}`);
+    }
   } finally {
     // Close database connection
     databaseService.close();

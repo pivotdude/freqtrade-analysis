@@ -15,10 +15,18 @@ src/
 │   └── DateFormatter.ts
 ├── generators/         # Report generation
 │   └── MarkdownReportGenerator.ts
+├── output/             # Delivery mode normalization and result writing
+│   ├── outputMode.ts
+│   └── ResultWriter.ts
+├── renderers/          # Content renderers
+│   ├── MarkdownReportRenderer.ts
+│   ├── JsonReportRenderer.ts
+│   └── ToonReportRenderer.ts
 ├── services/           # Data access services
 │   └── DatabaseService.ts
 └── types/              # Types and interfaces
-    └── trade.types.ts
+    ├── trade.types.ts
+    └── report.types.ts
 ```
 
 ## SOLID in Practice
@@ -33,6 +41,8 @@ Each class handles one clear responsibility:
 - **`riskMetrics`** - risk metrics (drawdown, Sharpe/Sortino, exposure)
 - **`DateFormatter`** - date and duration formatting
 - **`MarkdownReportGenerator`** - Markdown report generation
+- **`renderers/*`** - render analysis payload to `md/json/toon`
+- **`ResultWriter`** - delivers rendered output to file or stdout
 
 ### 2. Open/Closed Principle
 
@@ -41,6 +51,7 @@ Classes are open for extension but closed for modification:
 - New formatters can be added easily (for example, `JSONFormatter`, `CSVFormatter`) without changing existing code
 - New analyzers can be introduced (for example, `AdvancedTradeAnalyzer`) by extending base behavior
 - New report generators (HTML, PDF) can be added without changing analysis logic
+- New output delivery channels can be added without changing analyzers/renderers
 
 ### 3. Liskov Substitution Principle
 
