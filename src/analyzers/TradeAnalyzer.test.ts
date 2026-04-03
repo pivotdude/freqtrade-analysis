@@ -242,6 +242,41 @@ describe("TradeAnalyzer", () => {
     expect(stats.maxExposureAmount).toBe(1500);
   });
 
+  it("keeps closed-trade profit metrics while deriving exposure from open trades", async () => {
+    const analyzer = new TradeAnalyzer();
+    const closedTrades: Trade[] = [
+      createTrade({
+        id: 1,
+        close_profit_abs: 120,
+        open_date: "2024-01-01T00:00:00Z",
+        close_date: "2024-01-01T02:00:00Z",
+        stake_amount: 1000,
+      }),
+    ];
+    const exposureTrades: Trade[] = [
+      ...closedTrades,
+      createTrade({
+        id: 2,
+        open_date: "2024-01-01T01:00:00Z",
+        close_date: null,
+        close_rate: null,
+        close_profit: null,
+        close_profit_abs: null,
+        exit_reason: null,
+        is_open: 1,
+        stake_amount: 700,
+        fee_close_cost: null,
+      }),
+    ];
+
+    const stats = await analyzer.calculateStatistics(closedTrades, exposureTrades);
+
+    expect(stats.totalTrades).toBe(1);
+    expect(stats.totalProfit).toBe(120);
+    expect(stats.maxOpenTrades).toBe(2);
+    expect(stats.maxExposureAmount).toBe(1700);
+  });
+
   it("calculates direction-aware slippage for long and short entries", async () => {
     const analyzer = new TradeAnalyzer();
     const trades: Trade[] = [
@@ -302,6 +337,25 @@ describe("TradeAnalyzer", () => {
             price: 98,
             status: "open",
           }),
+        ],
+      }),
+    ];
+
+    const stats = await analyzer.calculateStatistics(trades);
+
+    expect(stats.totalSlippage).toBeCloseTo(1, 10);
+    expect(stats.averageSlippage).toBeCloseTo(1, 10);
+  });
+
+  it("ignores non-entry-side fills when calculating slippage", async () => {
+    const analyzer = new TradeAnalyzer();
+    const trades: Trade[] = [
+      createTrade({
+        id: 1,
+        is_short: 0,
+        orders: [
+          createOrder({ id: 31, ft_order_side: "buy", ft_price: 100, average: 101, filled: 1 }),
+          createOrder({ id: 32, ft_order_side: "sell", side: "sell", ft_price: 120, average: 90, filled: 1 }),
         ],
       }),
     ];

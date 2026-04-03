@@ -92,4 +92,24 @@ describe("resolveRuntimeConfig", () => {
       ),
     );
   });
+
+  it("throws a CLI usage error for invalid --capital", () => {
+    expect(() => resolveRuntimeConfig(["--capital", "0"])).toThrow(
+      new CliUsageError(
+        'Invalid value for --capital: 0. Use a positive number or "auto".',
+      ),
+    );
+  });
+
+  it("throws a CLI usage error when flag values are missing", () => {
+    expect(() => resolveRuntimeConfig(["--db"])).toThrow(
+      new CliUsageError("Missing value for --db"),
+    );
+    expect(() => resolveRuntimeConfig(["--format"])).toThrow(
+      new CliUsageError("Missing value for --format"),
+    );
+    expect(() => resolveRuntimeConfig(["--capital"])).toThrow(
+      new CliUsageError("Missing value for --capital"),
+    );
+  });
 });

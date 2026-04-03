@@ -162,4 +162,25 @@ describe("DatabaseService.getTradingInfo", () => {
     expect(tradingInfo.exchange).toBe("binance");
     expect(tradingInfo.firstTradeDate).toBe("2024-01-01T00:00:00Z");
   });
+
+  it("returns Unknown fields when there are no rows with strategy", () => {
+    const dbPath = createDatabaseWithTrades([
+      {
+        id: 1,
+        openDate: "2024-01-01T00:00:00Z",
+        strategy: null,
+        tradingMode: "spot",
+        exchange: "binance",
+      },
+    ]);
+
+    const service = new DatabaseService(dbPath);
+    const tradingInfo = service.getTradingInfo();
+    service.close();
+
+    expect(tradingInfo.strategy).toBe("Unknown");
+    expect(tradingInfo.tradingMode).toBe("Unknown");
+    expect(tradingInfo.exchange).toBe("Unknown");
+    expect(tradingInfo.firstTradeDate).toBe("Unknown");
+  });
 });
