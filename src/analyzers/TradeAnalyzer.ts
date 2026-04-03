@@ -34,7 +34,10 @@ export class TradeAnalyzer {
    * @param trades Trade list
    * @returns Statistics object
    */
-  async calculateStatistics(trades: Trade[]): Promise<TradeStatistics> {
+  async calculateStatistics(
+    trades: Trade[],
+    exposureTrades: Trade[] = trades,
+  ): Promise<TradeStatistics> {
     if (trades.length === 0) {
       return {
         totalTrades: 0,
@@ -119,7 +122,7 @@ export class TradeAnalyzer {
     const totalProfitOnProfitable = profitableTradesWithProfit.reduce((sum, t) => sum + t.close_profit_abs, 0);
     const avgFeePct = totalProfitOnProfitable > 0 ? (totalFeesOnProfitable / totalProfitOnProfitable) * 100 : 0;
 
-    const { maxOpenTrades, maxExposureAmount } = calculateExposure(trades);
+    const { maxOpenTrades, maxExposureAmount } = calculateExposure(exposureTrades);
 
     const buyAndHoldReturn = await this.calculateBuyAndHoldReturn(trades);
 

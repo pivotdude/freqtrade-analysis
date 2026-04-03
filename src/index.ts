@@ -73,7 +73,7 @@ async function main() {
 
     // Analyze data
     logInfo("🔍 Analyzing trades...");
-    const statistics = await tradeAnalyzer.calculateStatistics(closedTrades);
+    const statistics = await tradeAnalyzer.calculateStatistics(closedTrades, trades);
     const pairStats = tradeAnalyzer.calculatePairStatistics(closedTrades);
     const tagStats = tradeAnalyzer.calculateEnterTagStatistics(closedTrades);
     const topProfitable = tradeAnalyzer.getTopProfitable(closedTrades, 3);
@@ -86,7 +86,7 @@ async function main() {
 
     // Compose report statistics payload
     const reportStatistics: TradeStatistics = {
-      ...statistics, // Base metrics from closed trades
+      ...statistics, // Base metrics from closed trades + exposure from full trade set
     };
 
     if (resolvedCapital && resolvedCapital > 0) {

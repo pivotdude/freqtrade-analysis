@@ -183,4 +183,37 @@ describe("TradeAnalyzer", () => {
 
     expect(analyzer.estimateCapitalBaseline(trades)).toBe(1500);
   });
+
+  it("calculates exposure metrics from full trade set when provided", async () => {
+    const analyzer = new TradeAnalyzer();
+    const closedTrades: Trade[] = [
+      createTrade({
+        id: 1,
+        open_date: "2024-01-01T00:00:00Z",
+        close_date: "2024-01-01T02:00:00Z",
+        stake_amount: 1000,
+      }),
+    ];
+    const allTrades: Trade[] = [
+      ...closedTrades,
+      createTrade({
+        id: 2,
+        open_date: "2024-01-01T01:00:00Z",
+        close_date: null,
+        close_rate: null,
+        close_profit: null,
+        close_profit_abs: null,
+        exit_reason: null,
+        is_open: 1,
+        stake_amount: 500,
+        fee_close_cost: null,
+      }),
+    ];
+
+    const stats = await analyzer.calculateStatistics(closedTrades, allTrades);
+
+    expect(stats.totalTrades).toBe(1);
+    expect(stats.maxOpenTrades).toBe(2);
+    expect(stats.maxExposureAmount).toBe(1500);
+  });
 });
