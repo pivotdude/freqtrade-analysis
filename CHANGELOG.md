@@ -12,3 +12,4 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 - Initial project changelog.
 - Added `CONTRIBUTING.md` with contribution workflow and PR checklist.
 - Added `SECURITY.md` with vulnerability reporting guidance.
+- Added `validate:local-release` script to run full pre-release local validation (typecheck, tests, build, executable build, and private artifact audit).
