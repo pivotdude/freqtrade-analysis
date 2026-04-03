@@ -184,6 +184,21 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for details.
 - `slippage` is calculated only from available order data; if some order fields are missing, the metric is incomplete.
 - `buy and hold benchmark` depends on external exchange data (CCXT API) and may be unavailable due to network/API limits.
 
+## Privacy Audit
+
+Run the private-artifact audit before publishing or tagging a release:
+
+```bash
+bun run audit:private-artifacts
+```
+
+The audit checks:
+
+- tracked files in `HEAD`
+- full git history path names
+- required `.gitignore` rules for local trading files
+
+
 ## Public Repo Notes
 
 The repository should not include personal trading artifacts:

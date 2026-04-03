@@ -9,7 +9,8 @@
     "start": "bun src/index.ts",
     "build": "bun build src/index.ts --outdir dist --target bun",
     "build:exe": "bun build src/index.ts --compile --outfile freqtrade-analys",
-    "test": "bun test"
+    "test": "bun test",
+    "audit:private-artifacts": "bash scripts/audit-private-artifacts.sh"
   },
   "devDependencies": {
     "@types/bun": "latest"
