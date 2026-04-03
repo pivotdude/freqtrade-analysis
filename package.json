@@ -32,6 +32,7 @@
     "audit:private-artifacts": "bash scripts/audit-private-artifacts.sh"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "@types/node": "latest"
   }
 }
