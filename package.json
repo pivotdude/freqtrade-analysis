@@ -1,6 +1,6 @@
 {
   "name": "freqtrade-analysis",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "CLI for analyzing Freqtrade SQLite trades and printing markdown reports",
   "type": "module",
   "bin": {
