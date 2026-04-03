@@ -35,9 +35,21 @@ const parseNumber = (value: string | undefined): number | undefined => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 };
 
-const parseLanguage = (value: string | undefined): ReportLanguage => {
-  if (value === "ru") return "ru";
-  return "en";
+const parseLanguage = (
+  value: string | undefined,
+  source = "--lang",
+): ReportLanguage => {
+  if (!value) {
+    return DEFAULT_REPORT_LANG;
+  }
+
+  if (value === "en" || value === "ru") {
+    return value;
+  }
+
+  throw new CliUsageError(
+    `Invalid value for ${source}: ${value}. Use one of: en, ru.`,
+  );
 };
 
 const parseFormat = (
@@ -62,7 +74,20 @@ const parseBoolean = (value: string | undefined, fallback: boolean): boolean => 
   const normalized = value.trim().toLowerCase();
   if (["1", "true", "yes", "on"].includes(normalized)) return true;
   if (["0", "false", "no", "off"].includes(normalized)) return false;
-  return fallback;
+  throw new CliUsageError(
+    `Invalid value for ENABLE_BENCHMARK: ${value}. Use true/false.`,
+  );
+};
+
+const parseNonEmptyString = (
+  value: string,
+  source: string,
+): string => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    throw new CliUsageError(`Invalid value for ${source}: value must not be empty.`);
+  }
+  return trimmed;
 };
 
 const parseCapitalSetting = (
@@ -105,14 +130,42 @@ Priority: CLI flags > .env > defaults`;
 }
 
 const getBaseConfig = (): RuntimeConfig => ({
-  dbPath: process.env.DB_PATH ?? DEFAULT_DB_PATH,
+  dbPath: parseNonEmptyString(
+    process.env.DB_PATH ?? DEFAULT_DB_PATH,
+    "DB_PATH",
+  ),
   format: parseFormat(process.env.REPORT_FORMAT ?? DEFAULT_REPORT_FORMAT, "REPORT_FORMAT"),
   ...parseCapitalSetting(process.env.INITIAL_CAPITAL ?? DEFAULT_CAPITAL, "INITIAL_CAPITAL"),
-  reportLanguage: parseLanguage(process.env.REPORT_LANG ?? DEFAULT_REPORT_LANG),
-  benchmarkPair: process.env.BENCHMARK_PAIR ?? DEFAULT_BENCHMARK_PAIR,
+  reportLanguage: parseLanguage(
+    process.env.REPORT_LANG ?? DEFAULT_REPORT_LANG,
+    "REPORT_LANG",
+  ),
+  benchmarkPair: parseNonEmptyString(
+    process.env.BENCHMARK_PAIR ?? DEFAULT_BENCHMARK_PAIR,
+    "BENCHMARK_PAIR",
+  ),
   enableBenchmark: parseBoolean(process.env.ENABLE_BENCHMARK, DEFAULT_ENABLE_BENCHMARK),
-  exchangeId: process.env.EXCHANGE_ID ?? DEFAULT_EXCHANGE_ID,
+  exchangeId: parseNonEmptyString(
+    process.env.EXCHANGE_ID ?? DEFAULT_EXCHANGE_ID,
+    "EXCHANGE_ID",
+  ),
 });
+
+const validateResolvedConfig = (config: RuntimeConfig): RuntimeConfig => {
+  const dbPath = parseNonEmptyString(config.dbPath, "--db");
+  const exchangeId = parseNonEmptyString(config.exchangeId, "--exchange");
+  const benchmarkPair = parseNonEmptyString(
+    config.benchmarkPair,
+    "--benchmark",
+  );
+
+  return {
+    ...config,
+    dbPath,
+    exchangeId,
+    benchmarkPair,
+  };
+};
 
 export function resolveRuntimeConfig(argv: string[]): RuntimeConfig {
   const overrides: Partial<RuntimeConfig> = {};
@@ -129,7 +182,7 @@ export function resolveRuntimeConfig(argv: string[]): RuntimeConfig {
     const arg = argv[i];
     switch (arg) {
       case "--db":
-        overrides.dbPath = getValue(arg, i);
+        overrides.dbPath = parseNonEmptyString(getValue(arg, i), arg);
         i++;
         break;
       case "--format":
@@ -146,18 +199,18 @@ export function resolveRuntimeConfig(argv: string[]): RuntimeConfig {
         overrides.capitalMode = "none";
         break;
       case "--lang":
-        overrides.reportLanguage = parseLanguage(getValue(arg, i));
+        overrides.reportLanguage = parseLanguage(getValue(arg, i), arg);
         i++;
         break;
       case "--exchange":
-        overrides.exchangeId = getValue(arg, i);
+        overrides.exchangeId = parseNonEmptyString(getValue(arg, i), arg);
         i++;
         break;
       case "--benchmark": {
         const next = argv[i + 1];
         overrides.enableBenchmark = true;
         if (next && !next.startsWith("--")) {
-          overrides.benchmarkPair = next;
+          overrides.benchmarkPair = parseNonEmptyString(next, arg);
           i++;
         }
         break;
@@ -175,7 +228,7 @@ export function resolveRuntimeConfig(argv: string[]): RuntimeConfig {
   }
 
   const baseConfig = getBaseConfig();
-  return { ...baseConfig, ...overrides };
+  return validateResolvedConfig({ ...baseConfig, ...overrides });
 }
 
 function printHelpAndExit(): never {
