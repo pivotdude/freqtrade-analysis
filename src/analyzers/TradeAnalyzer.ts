@@ -1,5 +1,6 @@
 import type {
   Trade,
+  Order,
   TradeStatistics,
   PairStatisticsReport,
   Drawdown,
@@ -82,18 +83,10 @@ export class TradeAnalyzer {
     let slippageCount = 0;
 
     for (const trade of trades) {
-      if (trade.orders) {
-        for (const order of trade.orders) {
-          // Assuming 'buy' orders are relevant for slippage on entry
-          // ft_order_side could be 'buy' or 'sell'
-          // We are interested in the slippage when opening a position, so 'buy' for long, 'sell' for short (if applicable)
-          // For simplicity, let's consider 'buy' for now as typical entry
-          if (order.ft_order_side === 'buy' && order.ft_price && order.average && order.ft_price > 0) {
-            const slippage = ((order.average - order.ft_price) / order.ft_price) * 100;
-            totalSlippage += slippage;
-            slippageCount++;
-          }
-        }
+      const tradeSlippage = this.calculateEntrySlippage(trade);
+      if (tradeSlippage !== undefined) {
+        totalSlippage += tradeSlippage;
+        slippageCount++;
       }
     }
 
@@ -144,6 +137,72 @@ export class TradeAnalyzer {
       avgProfitPerHourPct,
       avgFeePct,
       buyAndHoldReturn,
+    };
+  }
+
+  private calculateEntrySlippage(trade: Trade): number | undefined {
+    if (!trade.orders || trade.orders.length === 0) {
+      return undefined;
+    }
+
+    const entrySide = trade.is_short === 1 ? "sell" : "buy";
+    const entryOrders = trade.orders.filter((order) => order.ft_order_side === entrySide);
+    if (entryOrders.length === 0) {
+      return undefined;
+    }
+
+    let expectedNotional = 0;
+    let executedNotional = 0;
+
+    for (const order of entryOrders) {
+      const values = this.resolveOrderExecution(order);
+      if (!values) {
+        continue;
+      }
+
+      expectedNotional += values.referencePrice * values.executedAmount;
+      executedNotional += values.executedPrice * values.executedAmount;
+    }
+
+    if (expectedNotional <= 0) {
+      return undefined;
+    }
+
+    if (entrySide === "buy") {
+      return ((executedNotional - expectedNotional) / expectedNotional) * 100;
+    }
+    return ((expectedNotional - executedNotional) / expectedNotional) * 100;
+  }
+
+  private resolveOrderExecution(order: Order): {
+    referencePrice: number;
+    executedPrice: number;
+    executedAmount: number;
+  } | undefined {
+    if (!order.ft_price || order.ft_price <= 0) {
+      return undefined;
+    }
+
+    const executedPrice =
+      (order.average && order.average > 0 && order.average)
+      || ((order.cost && order.cost > 0 && order.filled && order.filled > 0) ? order.cost / order.filled : undefined)
+      || (order.price && order.price > 0 ? order.price : undefined);
+    if (!executedPrice) {
+      return undefined;
+    }
+
+    const executedAmount =
+      (order.filled && order.filled > 0 && order.filled)
+      || (order.amount && order.amount > 0 ? order.amount : undefined)
+      || ((order.cost && order.cost > 0) ? order.cost / executedPrice : undefined);
+    if (!executedAmount) {
+      return undefined;
+    }
+
+    return {
+      referencePrice: order.ft_price,
+      executedPrice,
+      executedAmount,
     };
   }
 
