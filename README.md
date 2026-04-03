@@ -196,7 +196,7 @@ The audit checks:
 
 - tracked files in `HEAD`
 - full git history path names
-- required `.gitignore` rules for local trading files
+- required `.gitignore` rules for local trading files (all required rules must be present)
 
 
 ## Public Repo Notes
