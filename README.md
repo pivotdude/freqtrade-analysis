@@ -11,7 +11,6 @@ It is designed for both:
 
 - Analyze closed trades quickly without launching a full dashboard.
 - Keep report generation scriptable and CI-friendly.
-- Compare strategy performance against a Buy & Hold benchmark.
 - Export results in machine-readable or presentation-friendly formats.
 
 ## Features
@@ -20,7 +19,6 @@ It is designed for both:
 - Output formats: `md`, `json`, `toon`.
 - Core metrics: win rate, realized profit, pair-level performance.
 - Risk/return metrics: drawdown, Sharpe, Sortino, slippage (when data is available).
-- Optional Buy & Hold benchmark via CCXT.
 - English and Russian report localization.
 
 ## Requirements
@@ -54,9 +52,6 @@ bun run start -- [options]
 - `--capital <number|auto>`: capital baseline for percent/risk metrics (default: `auto`)
 - `--no-capital`: disable capital-based metrics
 - `--lang <en|ru>`: report language (default: `en`)
-- `--exchange <id>`: CCXT exchange id for benchmark data (default: `binance`)
-- `--benchmark [pair]`: enable benchmark and optionally set pair (default pair: `BTC/USDT`)
-- `--no-benchmark`: disable benchmark calculation
 - `--help`, `-h`: print help
 
 Configuration priority: **CLI > `.env` > defaults**.
@@ -70,9 +65,6 @@ DB_PATH=tradesv3.sqlite
 REPORT_FORMAT=md
 INITIAL_CAPITAL=9900
 REPORT_LANG=en
-ENABLE_BENCHMARK=true
-BENCHMARK_PAIR=BTC/USDT
-EXCHANGE_ID=binance
 ```
 
 Variables:
@@ -81,24 +73,18 @@ Variables:
 - `REPORT_FORMAT`: `md`, `json`, or `toon`
 - `INITIAL_CAPITAL`: positive number or `auto`
 - `REPORT_LANG`: `en` or `ru`
-- `ENABLE_BENCHMARK`: `true` / `false`
-- `BENCHMARK_PAIR`: pair used for Buy & Hold comparison
-- `EXCHANGE_ID`: exchange id passed to CCXT
 
 ## Examples
 
 ```bash
-# Markdown report without benchmark
-bun run start -- --format md --no-benchmark
+# Markdown report
+bun run start -- --format md
 
 # JSON report for machine consumption
-bun run start -- --format json --no-benchmark > report.json
+bun run start -- --format json > report.json
 
 # Toon formatted report in Russian
-bun run start -- --format toon --lang ru --no-benchmark
-
-# Explicit benchmark settings
-bun run start -- --benchmark ETH/USDT --exchange binance
+bun run start -- --format toon --lang ru
 ```
 
 ## Output contract
@@ -114,7 +100,7 @@ src/
 ├── formatters/         # Date/number formatting helpers
 ├── generators/         # Report generation orchestration
 ├── renderers/          # md/json/toon renderers
-├── services/           # Database and market data access
+├── services/           # Database access
 └── types/              # Shared TypeScript types
 ```
 
@@ -155,7 +141,6 @@ bun run validate:local-release
 - Drawdown is based on **closed trades**, not a full account equity time series.
 - Sharpe/Sortino are calculated from per-trade returns, not time-normalized returns.
 - Slippage requires sufficiently complete order fields in source data.
-- Benchmark results depend on external exchange availability and API limits.
 
 ## Public release & data hygiene
 

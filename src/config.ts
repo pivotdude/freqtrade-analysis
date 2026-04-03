@@ -14,9 +14,6 @@ const DEFAULT_DB_PATH = "tradesv3.sqlite";
 const DEFAULT_REPORT_FORMAT: ReportOutputFormat = "md";
 const DEFAULT_CAPITAL = "auto";
 const DEFAULT_REPORT_LANG: ReportLanguage = "en";
-const DEFAULT_BENCHMARK_PAIR = "BTC/USDT";
-const DEFAULT_ENABLE_BENCHMARK = true;
-const DEFAULT_EXCHANGE_ID = "binance";
 
 export interface RuntimeConfig {
   dbPath: string;
@@ -24,15 +21,20 @@ export interface RuntimeConfig {
   initialCapital?: number;
   capitalMode: CapitalMode;
   reportLanguage: ReportLanguage;
-  benchmarkPair: string;
-  enableBenchmark: boolean;
-  exchangeId: string;
 }
 
 const parseNumber = (value: string | undefined): number | undefined => {
   if (!value) return undefined;
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+};
+
+const parseNonEmptyString = (value: string, source: string): string => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    throw new CliUsageError(`Invalid value for ${source}: value must not be empty.`);
+  }
+  return trimmed;
 };
 
 const parseLanguage = (
@@ -71,27 +73,6 @@ const parseFormat = (
   );
 };
 
-const parseBoolean = (value: string | undefined, fallback: boolean): boolean => {
-  if (value === undefined) return fallback;
-  const normalized = value.trim().toLowerCase();
-  if (["1", "true", "yes", "on"].includes(normalized)) return true;
-  if (["0", "false", "no", "off"].includes(normalized)) return false;
-  throw new CliUsageError(
-    `Invalid value for ENABLE_BENCHMARK: ${value}. Use true/false.`,
-  );
-};
-
-const parseNonEmptyString = (
-  value: string,
-  source: string,
-): string => {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    throw new CliUsageError(`Invalid value for ${source}: value must not be empty.`);
-  }
-  return trimmed;
-};
-
 const parseCapitalSetting = (
   value: string | undefined,
   source = "--capital",
@@ -123,9 +104,6 @@ Options:
   --capital <amount|auto> Capital baseline for percent/risk metrics (default: ${DEFAULT_CAPITAL})
   --no-capital            Disable capital-based metrics (default: off)
   --lang <en|ru>          Report language (default: ${DEFAULT_REPORT_LANG})
-  --exchange <id>         Exchange id for benchmark data (default: ${DEFAULT_EXCHANGE_ID})
-  --benchmark [pair]      Enable benchmark (default: on, pair ${DEFAULT_BENCHMARK_PAIR})
-  --no-benchmark          Disable benchmark calculation (default: off)
   --help, -h              Show this help
 
 Priority: CLI flags > .env > defaults`;
@@ -142,25 +120,13 @@ const getBaseConfig = (): RuntimeConfig => ({
     process.env.REPORT_LANG ?? DEFAULT_REPORT_LANG,
     "REPORT_LANG",
   ),
-  benchmarkPair: (process.env.BENCHMARK_PAIR ?? DEFAULT_BENCHMARK_PAIR).trim(),
-  enableBenchmark: parseBoolean(process.env.ENABLE_BENCHMARK, DEFAULT_ENABLE_BENCHMARK),
-  exchangeId: (process.env.EXCHANGE_ID ?? DEFAULT_EXCHANGE_ID).trim(),
 });
 
 const validateResolvedConfig = (config: RuntimeConfig): RuntimeConfig => {
   const dbPath = parseNonEmptyString(config.dbPath, "--db");
-  const exchangeId = config.enableBenchmark
-    ? parseNonEmptyString(config.exchangeId, "--exchange")
-    : config.exchangeId.trim();
-  const benchmarkPair = config.enableBenchmark
-    ? parseNonEmptyString(config.benchmarkPair, "--benchmark")
-    : config.benchmarkPair.trim();
-
   return {
     ...config,
     dbPath,
-    exchangeId,
-    benchmarkPair,
   };
 };
 
@@ -198,22 +164,6 @@ export function resolveRuntimeConfig(argv: string[]): RuntimeConfig {
       case "--lang":
         overrides.reportLanguage = parseLanguage(getValue(arg, i), arg);
         i++;
-        break;
-      case "--exchange":
-        overrides.exchangeId = parseNonEmptyString(getValue(arg, i), arg);
-        i++;
-        break;
-      case "--benchmark": {
-        const next = argv[i + 1];
-        overrides.enableBenchmark = true;
-        if (next && !next.startsWith("--")) {
-          overrides.benchmarkPair = parseNonEmptyString(next, arg);
-          i++;
-        }
-        break;
-      }
-      case "--no-benchmark":
-        overrides.enableBenchmark = false;
         break;
       case "--help":
       case "-h":

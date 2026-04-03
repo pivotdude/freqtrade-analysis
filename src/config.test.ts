@@ -10,9 +10,6 @@ describe("resolveRuntimeConfig", () => {
       "REPORT_FORMAT",
       "INITIAL_CAPITAL",
       "REPORT_LANG",
-      "ENABLE_BENCHMARK",
-      "BENCHMARK_PAIR",
-      "EXCHANGE_ID",
     ]) {
       delete process.env[key];
     }
@@ -116,12 +113,6 @@ describe("resolveRuntimeConfig", () => {
     expect(() => resolveRuntimeConfig(["--db", "   "])).toThrow(
       new CliUsageError("Invalid value for --db: value must not be empty."),
     );
-    expect(() => resolveRuntimeConfig(["--exchange", "   "])).toThrow(
-      new CliUsageError("Invalid value for --exchange: value must not be empty."),
-    );
-    expect(() => resolveRuntimeConfig(["--benchmark", "   "])).toThrow(
-      new CliUsageError("Invalid value for --benchmark: value must not be empty."),
-    );
   });
 
   it("fails fast for invalid runtime environment values", () => {
@@ -131,30 +122,10 @@ describe("resolveRuntimeConfig", () => {
     );
 
     delete process.env.REPORT_LANG;
-    process.env.ENABLE_BENCHMARK = "maybe";
+    process.env.DB_PATH = "   ";
     expect(() => resolveRuntimeConfig([])).toThrow(
-      new CliUsageError(
-        "Invalid value for ENABLE_BENCHMARK: maybe. Use true/false.",
-      ),
+      new CliUsageError("Invalid value for DB_PATH: value must not be empty."),
     );
-
-    delete process.env.ENABLE_BENCHMARK;
-    process.env.EXCHANGE_ID = "   ";
-    expect(() => resolveRuntimeConfig([])).toThrow(
-      new CliUsageError("Invalid value for --exchange: value must not be empty."),
-    );
-  });
-
-  it("does not require exchange or benchmark pair when benchmark is disabled", () => {
-    process.env.ENABLE_BENCHMARK = "false";
-    process.env.EXCHANGE_ID = "   ";
-    process.env.BENCHMARK_PAIR = "   ";
-
-    const config = resolveRuntimeConfig([]);
-
-    expect(config.enableBenchmark).toBe(false);
-    expect(config.exchangeId).toBe("");
-    expect(config.benchmarkPair).toBe("");
   });
 
   it("throws a CLI usage error when flag values are missing", () => {

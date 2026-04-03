@@ -21,7 +21,6 @@
   },
   "dependencies": {
     "@toon-format/toon": "^2.1.0",
-    "ccxt": "^4.5.34",
     "protobufjs": "^8.0.0"
   }
 }

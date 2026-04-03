@@ -43,17 +43,11 @@ async function main() {
     initialCapital,
     capitalMode,
     reportLanguage,
-    benchmarkPair,
-    enableBenchmark,
-    exchangeId,
   } = runtimeConfig;
 
   // Create service instances (Dependency Injection)
   const databaseService = new DatabaseService(dbPath);
-  const marketDataProvider = enableBenchmark
-    ? new (await import("./services/MarketDataService")).MarketDataService(exchangeId)
-    : undefined;
-  const tradeAnalyzer = new TradeAnalyzer(marketDataProvider, benchmarkPair);
+  const tradeAnalyzer = new TradeAnalyzer();
 
   try {
     // Load data
@@ -130,9 +124,6 @@ async function main() {
     }
     if (reportStatistics.sortinoRatio !== undefined) {
       logInfo(`- Sortino Ratio: ${reportStatistics.sortinoRatio.toFixed(3)}`);
-    }
-    if (reportStatistics.buyAndHoldReturn !== undefined) {
-      logInfo(`- Buy & Hold return (BTC): ${reportStatistics.buyAndHoldReturn.toFixed(2)}%`);
     }
     logInfo(`- Total slippage: ${(reportStatistics.totalSlippage ?? 0).toFixed(2)}`);
     logInfo(`- Average slippage: ${(reportStatistics.averageSlippage ?? 0).toFixed(2)}`);
