@@ -183,7 +183,8 @@ git rm --cached tradesv3.sqlite tradesv3.sqlite-shm tradesv3.sqlite-wal
 ## CI / release notes
 
 - CI workflow: `.github/workflows/ci.yml`
-- CI runs on pushes and pull requests
+- CI runs on pull requests, pushes to `main`, and version tags (`v*`)
+- CI can be started manually via `workflow_dispatch` for an existing ref (for example `v1.0.0`)
 - Release workflow publishes standalone binaries for major OS targets
 
 ## License
