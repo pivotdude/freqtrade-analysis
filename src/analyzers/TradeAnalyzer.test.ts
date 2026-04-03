@@ -45,7 +45,6 @@ describe("TradeAnalyzer", () => {
     expect(stats.expectancy).toBe(0);
     expect(stats.maxOpenTrades).toBe(0);
     expect(stats.maxExposureAmount).toBe(0);
-    expect(stats.buyAndHoldReturn).toBeUndefined();
   });
 
   it("calculates mixed wins and losses metrics", async () => {

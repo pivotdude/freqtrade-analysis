@@ -44,9 +44,6 @@ Available variables:
 - `REPORT_FORMAT` - output format: `md`, `json`, `toon` (default: `md`)
 - `INITIAL_CAPITAL` - capital baseline for percent/risk metrics, accepts a positive number or `auto` (default: `auto`)
 - `REPORT_LANG` - report language: `en` or `ru` (default: `en`)
-- `ENABLE_BENCHMARK` - enable Buy & Hold benchmark (`true/false`, default: `true`)
-- `BENCHMARK_PAIR` - benchmark pair (default: `BTC/USDT`)
-- `EXCHANGE_ID` - exchange id for benchmark via CCXT (default: `binance`)
 
 ## CLI Arguments
 
@@ -57,9 +54,7 @@ bun run start -- \
   --db tradesv3.sqlite \
   --format md \
   --capital auto \
-  --lang en \
-  --exchange binance \
-  --benchmark BTC/USDT
+  --lang en
 ```
 
 Flags:
@@ -69,9 +64,6 @@ Flags:
 - `--capital <number|auto>` - capital baseline for percent/risk metrics (default: `auto`)
 - `--no-capital` - disable capital-based metrics even if set in env
 - `--lang <en|ru>` - report language (default: `en`)
-- `--exchange <id>` - exchange id for benchmark (default: `binance`)
-- `--benchmark [pair]` - enable benchmark, optionally set pair (default: enabled, `BTC/USDT`)
-- `--no-benchmark` - disable benchmark calculation
 - `--help` - show help
 
 ## Usage
@@ -85,9 +77,9 @@ bun run start
 Agent/pipeline mode to stdout:
 
 ```bash
-bun run start -- --format md --no-benchmark
-bun run start -- --format json --no-benchmark > report.json
-bun run start -- --format toon --no-benchmark
+bun run start -- --format md
+bun run start -- --format json > report.json
+bun run start -- --format toon
 ```
 
 Core project commands:
@@ -182,7 +174,6 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for details.
 - `drawdown` is calculated from **closed** trades only, not a full equity-curve time series.
 - `sharpe` and `sortino` are calculated from per-trade returns, not a uniform time-series return stream.
 - `slippage` is calculated only from available order data; if some order fields are missing, the metric is incomplete.
-- `buy and hold benchmark` depends on external exchange data (CCXT API) and may be unavailable due to network/API limits.
 
 ## Public Repo Notes
 

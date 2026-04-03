@@ -5,7 +5,6 @@ import type {
   Drawdown,
   EnterTagStatisticsReport,
 } from "../types/trade.types";
-import type { HistoricalPriceProvider } from "../types/market.types";
 import {
   calculatePairStatistics as calculatePairStatisticsMetric,
   calculateEnterTagStatistics as calculateEnterTagStatisticsMetric,
@@ -24,11 +23,6 @@ import {
  * Follows Single Responsibility for analytics and metric calculations.
  */
 export class TradeAnalyzer {
-  constructor(
-    private readonly marketDataProvider?: HistoricalPriceProvider,
-    private readonly benchmarkPair: string = "BTC/USDT",
-  ) {}
-
   /**
    * Computes overall statistics for all trades.
    * @param trades Trade list
@@ -121,9 +115,6 @@ export class TradeAnalyzer {
 
     const { maxOpenTrades, maxExposureAmount } = calculateExposure(trades);
 
-    const buyAndHoldReturn = await this.calculateBuyAndHoldReturn(trades);
-
-
     return {
       totalTrades,
       profitableTrades,
@@ -140,56 +131,7 @@ export class TradeAnalyzer {
       averageSlippage,
       avgProfitPerHourPct,
       avgFeePct,
-      buyAndHoldReturn,
     };
-  }
-
-  private async calculateBuyAndHoldReturn(trades: Trade[]): Promise<number | undefined> {
-    if (!this.marketDataProvider || trades.length === 0) {
-      return undefined;
-    }
-
-    const sortedByOpenDate = [...trades].sort(
-      (a, b) => new Date(a.open_date).getTime() - new Date(b.open_date).getTime(),
-    );
-    const firstTrade = sortedByOpenDate[0];
-    if (!firstTrade) {
-      return undefined;
-    }
-
-    const closedTrades = trades.filter(
-      (trade): trade is Trade & { close_date: string } => typeof trade.close_date === "string",
-    );
-    if (closedTrades.length === 0) {
-      return undefined;
-    }
-
-    const lastTrade = closedTrades.sort(
-      (a, b) => new Date(a.close_date).getTime() - new Date(b.close_date).getTime(),
-    )[closedTrades.length - 1];
-    if (!lastTrade) {
-      return undefined;
-    }
-
-    try {
-      const startPrice = await this.marketDataProvider.getHistoricalPrice(
-        this.benchmarkPair,
-        new Date(firstTrade.open_date),
-      );
-      const endPrice = await this.marketDataProvider.getHistoricalPrice(
-        this.benchmarkPair,
-        new Date(lastTrade.close_date),
-      );
-
-      if (startPrice <= 0) {
-        return undefined;
-      }
-
-      return ((endPrice - startPrice) / startPrice) * 100;
-    } catch (error) {
-      console.warn(`\n⚠️ Could not calculate Buy & Hold return: ${(error as Error).message}`);
-      return undefined;
-    }
   }
 
   /**

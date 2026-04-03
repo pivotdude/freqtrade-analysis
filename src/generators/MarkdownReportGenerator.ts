@@ -110,14 +110,6 @@ export class MarkdownReportGenerator {
       "Средняя ожидаемая прибыль на сделку с учетом винрейта и средней прибыли/убытка.",
     )}*\n`;
 
-    if (stats.buyAndHoldReturn !== undefined) {
-      md += `- **${this.t("Buy & Hold Return (BTC)", "Доходность Buy & Hold (BTC)")}:** ${stats.buyAndHoldReturn.toFixed(2)}%\n`;
-      md += `    - *${this.t(
-        "BTC/USDT buy-and-hold return over the same period, used as a benchmark.",
-        "Доходность стратегии купи-и-держи BTC/USDT за тот же период как бенчмарк.",
-      )}*\n`;
-    }
-
     if (stats.avgProfitPerHourPct !== undefined) {
       md += `- **${this.t("Average Profit per Hour", "Средняя прибыль в час")}:** ${stats.avgProfitPerHourPct.toFixed(2)}%\n`;
       md += `    - *${this.t(

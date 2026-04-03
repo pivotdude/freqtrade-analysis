@@ -10,9 +10,6 @@ describe("resolveRuntimeConfig", () => {
       "REPORT_FORMAT",
       "INITIAL_CAPITAL",
       "REPORT_LANG",
-      "ENABLE_BENCHMARK",
-      "BENCHMARK_PAIR",
-      "EXCHANGE_ID",
     ]) {
       delete process.env[key];
     }

@@ -116,7 +116,7 @@ describe("CLI stdout contract", () => {
   it("uses markdown stdout by default when --format is omitted", () => {
     const dbPath = createFixtureDatabase();
     const proc = Bun.spawnSync(
-      ["bun", "src/index.ts", "--db", dbPath, "--no-benchmark"],
+      ["bun", "src/index.ts", "--db", dbPath],
       {
         cwd: PROJECT_ROOT,
         stdout: "pipe",
@@ -137,7 +137,7 @@ describe("CLI stdout contract", () => {
   it("writes only report payload to stdout in json mode", () => {
     const dbPath = createFixtureDatabase();
     const proc = Bun.spawnSync(
-      ["bun", "src/index.ts", "--db", dbPath, "--format", "json", "--no-benchmark"],
+      ["bun", "src/index.ts", "--db", dbPath, "--format", "json"],
       {
         cwd: PROJECT_ROOT,
         stdout: "pipe",
