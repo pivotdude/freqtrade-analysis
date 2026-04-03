@@ -33,9 +33,37 @@ export class DatabaseService {
 
     const trades = tradesQuery.all();
 
-    // Load orders for each trade
+    if (trades.length === 0) {
+      return trades;
+    }
+
+    const tradeIds = trades.map((trade) => trade.id);
+    const placeholders = tradeIds.map(() => "?").join(", ");
+    const ordersQuery = this.db.query<Order, number[]>(`
+      SELECT
+        id, ft_trade_id, ft_order_side, ft_pair, ft_is_open,
+        ft_amount, ft_price, order_id, status, order_type,
+        side, price, average, amount, filled, cost,
+        order_date, order_filled_date, ft_order_tag
+      FROM orders
+      WHERE ft_trade_id IN (${placeholders})
+      ORDER BY ft_trade_id ASC, order_date ASC
+    `);
+
+    const orders = ordersQuery.all(...tradeIds);
+    const ordersByTradeId = new Map<number, Order[]>();
+
+    for (const order of orders) {
+      const current = ordersByTradeId.get(order.ft_trade_id);
+      if (current) {
+        current.push(order);
+      } else {
+        ordersByTradeId.set(order.ft_trade_id, [order]);
+      }
+    }
+
     for (const trade of trades) {
-      trade.orders = this.getOrdersForTrade(trade.id);
+      trade.orders = ordersByTradeId.get(trade.id) ?? [];
     }
 
     return trades;
@@ -75,26 +103,6 @@ export class DatabaseService {
       exchange: result?.exchange || 'Unknown',
       firstTradeDate: result?.first_trade_date || 'Unknown'
     };
-  }
-
-  /**
-   * Fetches all orders for a specific trade.
-   * @param tradeId Trade ID
-   * @returns Order list
-   */
-  private getOrdersForTrade(tradeId: number): Order[] {
-    const ordersQuery = this.db.query<Order, [number]>(`
-      SELECT
-        id, ft_trade_id, ft_order_side, ft_pair, ft_is_open,
-        ft_amount, ft_price, order_id, status, order_type,
-        side, price, average, amount, filled, cost,
-        order_date, order_filled_date, ft_order_tag
-      FROM orders
-      WHERE ft_trade_id = ?
-      ORDER BY order_date ASC
-    `);
-
-    return ordersQuery.all(tradeId);
   }
 
   /**

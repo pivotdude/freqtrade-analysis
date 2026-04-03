@@ -99,6 +99,37 @@ function createDatabaseWithTrades(
   return dbPath;
 }
 
+function insertOrder(
+  dbPath: string,
+  order: { id: number; tradeId: number; orderDate: string; side: string },
+): void {
+  const db = new Database(dbPath);
+  const insert = db.query(`
+    INSERT INTO orders (
+      id, ft_trade_id, ft_order_side, ft_pair, ft_is_open,
+      ft_amount, ft_price, order_id, status, order_type,
+      side, price, average, amount, filled, cost,
+      order_date, order_filled_date, ft_order_tag
+    ) VALUES (
+      ?, ?, ?, 'BTC/USDT', 0,
+      1, 100, ?, 'closed', 'limit',
+      ?, 100, 100, 1, 1, 100,
+      ?, ?, NULL
+    )
+  `);
+
+  insert.run(
+    order.id,
+    order.tradeId,
+    order.side,
+    `order-${order.id}`,
+    order.side,
+    order.orderDate,
+    order.orderDate,
+  );
+  db.close();
+}
+
 afterEach(() => {
   for (const dir of tempDirs) {
     rmSync(dir, { recursive: true, force: true });
@@ -182,5 +213,75 @@ describe("DatabaseService.getTradingInfo", () => {
     expect(tradingInfo.tradingMode).toBe("Unknown");
     expect(tradingInfo.exchange).toBe("Unknown");
     expect(tradingInfo.firstTradeDate).toBe("Unknown");
+  });
+});
+
+describe("DatabaseService.getAllTrades", () => {
+  it("loads orders for all trades in one pass and maps them by trade id", () => {
+    const dbPath = createDatabaseWithTrades([
+      {
+        id: 2,
+        openDate: "2024-02-01T00:00:00Z",
+        strategy: "strat-2",
+        tradingMode: "spot",
+        exchange: "binance",
+      },
+      {
+        id: 1,
+        openDate: "2024-01-01T00:00:00Z",
+        strategy: "strat-1",
+        tradingMode: "spot",
+        exchange: "binance",
+      },
+    ]);
+
+    insertOrder(dbPath, {
+      id: 100,
+      tradeId: 1,
+      orderDate: "2024-01-01T00:01:00Z",
+      side: "buy",
+    });
+    insertOrder(dbPath, {
+      id: 101,
+      tradeId: 1,
+      orderDate: "2024-01-01T00:02:00Z",
+      side: "sell",
+    });
+    insertOrder(dbPath, {
+      id: 200,
+      tradeId: 2,
+      orderDate: "2024-02-01T00:01:00Z",
+      side: "buy",
+    });
+
+    const service = new DatabaseService(dbPath);
+    const trades = service.getAllTrades();
+    service.close();
+
+    expect(trades.length).toBe(2);
+    expect(trades[0]?.id).toBe(2);
+    expect(trades[1]?.id).toBe(1);
+
+    expect(trades[0]?.orders?.map((order) => order.id)).toEqual([200]);
+    expect(trades[1]?.orders?.map((order) => order.id)).toEqual([100, 101]);
+  });
+
+  it("returns empty order arrays when trades have no orders", () => {
+    const dbPath = createDatabaseWithTrades([
+      {
+        id: 1,
+        openDate: "2024-01-01T00:00:00Z",
+        strategy: "strat-1",
+        tradingMode: "spot",
+        exchange: "binance",
+      },
+    ]);
+
+    const service = new DatabaseService(dbPath);
+    const trades = service.getAllTrades();
+    service.close();
+
+    expect(trades.length).toBe(1);
+    expect(trades[0]?.orders).toEqual([]);
   });
 });
