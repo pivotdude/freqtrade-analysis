@@ -143,6 +143,12 @@ bun run build
 bun run build:exe
 ```
 
+Before publishing a public release/tag, run the full local validation cycle:
+
+```bash
+bun run validate:local-release
+```
+
 ## Metrics limitations
 
 - `--capital auto` estimates capital from max observed concurrent stake exposure.
@@ -156,10 +162,11 @@ bun run build:exe
 Before publishing a release/tag, run:
 
 ```bash
-bun run audit:private-artifacts
+bun run validate:local-release
 ```
 
-The audit checks tracked files, git history paths, and required `.gitignore` rules.
+This command runs type checks, tests, build targets, and private artifact audit in one pass.
+The audit stage checks tracked files, git history paths, and required `.gitignore` rules.
 
 Never commit private trading artifacts such as:
 

@@ -10,6 +10,7 @@
     "build": "bun build src/index.ts --outdir dist --target bun",
     "build:exe": "bun build src/index.ts --compile --outfile freqtrade-analys",
     "test": "bun test",
+    "validate:local-release": "bash scripts/validate-local-release.sh",
     "audit:private-artifacts": "bash scripts/audit-private-artifacts.sh"
   },
   "devDependencies": {

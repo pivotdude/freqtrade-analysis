@@ -49,8 +49,16 @@ bun run build:exe
 Also run the private artifact audit:
 
 ```bash
-bun run audit:private-artifacts
+bun run validate:local-release
 ```
+
+`validate:local-release` runs the full public-release gate:
+
+- `bunx tsc --noEmit`
+- `bun run test`
+- `bun run build`
+- `bun run build:exe`
+- `bun run audit:private-artifacts`
 
 ## Pull request checklist
 
